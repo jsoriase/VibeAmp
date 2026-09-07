@@ -1,0 +1,910 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+		68D69C2A0BD703D72E28EDAD = {
+			isa = PBXProject;
+			buildConfigurationList = 7D2811BDE7CEF7224D362561;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en);
+			mainGroup = 3E55646611CD630C6193ABD5;
+			productRefGroup = 8C1969BC5989E871C77EB3CC;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D6B2EABB9250833A4E0B3B11,
+				92B76ED6EF34469AC30676A8,
+			);
+		};
+		3E55646611CD630C6193ABD5 = {
+			isa = PBXGroup;
+			children = (
+				0B974C97E2ED8C4F9D0878B6,
+				C1D5B93EB31FC051FFE18044,
+				8C1969BC5989E871C77EB3CC,
+			);
+			sourceTree = "<group>";
+		};
+		8C1969BC5989E871C77EB3CC = {
+			isa = PBXGroup;
+			children = (
+				8D2BCEFE569FDD47B23F604B,
+				6FD11958C0B5F650DCD3FB9A,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0B974C97E2ED8C4F9D0878B6 = {
+			isa = PBXGroup;
+			children = (
+				E2F6770D4FDDF416ABEA76DB,
+				31EFDF42A4BDCEE215A15D80,
+				018F6DA9032F96B1F2808C4E,
+				4DD34D3B94FBB9E4804400E6,
+				467B43245B4313EDF1EECFB9,
+				43EC7457C211C325DC8082A9,
+				3EACDB103DF3F7ED437BF4E5
+			);
+			name = VibeAmp;
+			path = VibeAmp;
+			sourceTree = "<group>";
+		};
+		E2F6770D4FDDF416ABEA76DB = {
+			isa = PBXGroup;
+			children = (
+				CC6437533D3BF97F62C63A89,
+				B3610C17518919143740FAEA
+			);
+			name = App;
+			sourceTree = "<group>";
+		};
+		31EFDF42A4BDCEE215A15D80 = {
+			isa = PBXGroup;
+			children = (
+				FCC00E722247B91428AFBC88,
+				266A56FD94FBBB34C79DBF93,
+				4D1BEB6520939D77C978BE4F,
+				FECBA8B74322AE142EF94760,
+				CD4C4637FE174D3D8BF86A29
+			);
+			name = Models;
+			sourceTree = "<group>";
+		};
+		018F6DA9032F96B1F2808C4E = {
+			isa = PBXGroup;
+			children = (
+				A2AB8A9D49E6205EF9A0A70F
+			);
+			name = Persistence;
+			sourceTree = "<group>";
+		};
+		4DD34D3B94FBB9E4804400E6 = {
+			isa = PBXGroup;
+			children = (
+				AA059F03067DD3794AE1BDA1,
+				D5DD338AB78BEA7F65D856A7,
+				8D9399628BD0F49953E42C43,
+				FFA4AC20E66A109B9CF4EC5F
+			);
+			name = Playback;
+			sourceTree = "<group>";
+		};
+		9CBC44B1535A25E1EA733999 = {
+			isa = PBXGroup;
+			children = (
+				3CEED0C5545DC260BB233806
+			);
+			name = Artwork;
+			sourceTree = "<group>";
+		};
+		8391DA201DCABC63A8A2EEEC = {
+			isa = PBXGroup;
+			children = (
+				5C8446C49C003D521B5A0E17
+			);
+			name = Components;
+			sourceTree = "<group>";
+		};
+		F6305068F32891D5F18E6DE7 = {
+			isa = PBXGroup;
+			children = (
+				F338BAAE8D4CFB778C3F8508
+			);
+			name = Equalizer;
+			sourceTree = "<group>";
+		};
+		5A48C33B176C6CD8675AA30C = {
+			isa = PBXGroup;
+			children = (
+				B1A20A02DC440A2FCADCD10D
+			);
+			name = Log;
+			sourceTree = "<group>";
+		};
+		2922A89AE95F237BE7249E8E = {
+			isa = PBXGroup;
+			children = (
+				6F9F41F1E8057DCB5243FB93
+			);
+			name = MenuBar;
+			sourceTree = "<group>";
+		};
+		DF25ACD8F800708A88EDD0E5 = {
+			isa = PBXGroup;
+			children = (
+				189EC0779DBC542D2EC8CF23
+			);
+			name = Player;
+			sourceTree = "<group>";
+		};
+		2BC865E1DD772764199B2035 = {
+			isa = PBXGroup;
+			children = (
+				C15D1E1870D7821B3B120724
+			);
+			name = Playlist;
+			sourceTree = "<group>";
+		};
+		22D1AAB68A3D55FDF7F76FC0 = {
+			isa = PBXGroup;
+			children = (
+				720FA396E7B6B8A9241B4389
+			);
+			name = Search;
+			sourceTree = "<group>";
+		};
+		A3771D503A75D857322D8A74 = {
+			isa = PBXGroup;
+			children = (
+				1DFC722B236AA5C77F444B00
+			);
+			name = Theme;
+			sourceTree = "<group>";
+		};
+		467B43245B4313EDF1EECFB9 = {
+			isa = PBXGroup;
+			children = (
+				82CC0075E3C221FA0F2B9715,
+				7102B9A53BD117BB8C47C55A,
+				3ABFBA8CDDDD398D8519D6ED,
+				67E36484B20ECB211521B71D
+			);
+			name = Windowing;
+			sourceTree = "<group>";
+		};
+		3EACDB103DF3F7ED437BF4E5 = {
+			isa = PBXGroup;
+			children = (
+				0D16C11C00C25E13A46ED608
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
+		43EC7457C211C325DC8082A9 = {
+			isa = PBXGroup;
+			children = (
+				A4700196BD54CF052F5550A2,
+				41ECF3DC7188D1D2673F4C02,
+				1C516B1B2B088930E7DC823B,
+				DEAE6ADE68DBDF9196FD7817
+			);
+			name = YouTube;
+			sourceTree = "<group>";
+		};
+		C1D5B93EB31FC051FFE18044 = {
+			isa = PBXGroup;
+			children = (
+				7EB77E5F18366E2105128BE9,
+				5FB215537C7965C6E62EBA9F,
+				1A5F723FF7E0648C74236E7F,
+				A16FADAEA4AA050FDDC799C9
+			);
+			name = VibeAmpTests;
+			path = VibeAmpTests;
+			sourceTree = "<group>";
+		};
+		0B974C97E2ED8C4F9D0878B6 = {
+			isa = PBXGroup;
+			children = (
+				E2F6770D4FDDF416ABEA76DB,
+				31EFDF42A4BDCEE215A15D80,
+				018F6DA9032F96B1F2808C4E,
+				4DD34D3B94FBB9E4804400E6,
+				467B43245B4313EDF1EECFB9,
+				43EC7457C211C325DC8082A9,
+				3EACDB103DF3F7ED437BF4E5
+			);
+			name = VibeAmp;
+			path = VibeAmp;
+			sourceTree = "<group>";
+		};
+		C1D5B93EB31FC051FFE18044 = {
+			isa = PBXGroup;
+			children = (
+				7EB77E5F18366E2105128BE9,
+				5FB215537C7965C6E62EBA9F,
+				1A5F723FF7E0648C74236E7F,
+				A16FADAEA4AA050FDDC799C9
+			);
+			name = VibeAmpTests;
+			path = VibeAmpTests;
+			sourceTree = "<group>";
+		};
+		CC6437533D3BF97F62C63A89 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = AppState.swift;
+			path = VibeAmp/App/AppState.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B3610C17518919143740FAEA = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = VibeAmpApp.swift;
+			path = VibeAmp/App/VibeAmpApp.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FCC00E722247B91428AFBC88 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = EQSettings.swift;
+			path = VibeAmp/Models/EQSettings.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		266A56FD94FBBB34C79DBF93 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = LogEntry.swift;
+			path = VibeAmp/Models/LogEntry.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		4D1BEB6520939D77C978BE4F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = QueueState.swift;
+			path = VibeAmp/Models/QueueState.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FECBA8B74322AE142EF94760 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = Track.swift;
+			path = VibeAmp/Models/Track.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		CD4C4637FE174D3D8BF86A29 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = WindowState.swift;
+			path = VibeAmp/Models/WindowState.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A2AB8A9D49E6205EF9A0A70F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = StateStore.swift;
+			path = VibeAmp/Persistence/StateStore.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		AA059F03067DD3794AE1BDA1 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = EqualizerDSP.swift;
+			path = VibeAmp/Playback/EqualizerDSP.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		D5DD338AB78BEA7F65D856A7 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = EqualizerTap.swift;
+			path = VibeAmp/Playback/EqualizerTap.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8D9399628BD0F49953E42C43 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = NowPlayingController.swift;
+			path = VibeAmp/Playback/NowPlayingController.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		FFA4AC20E66A109B9CF4EC5F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = PlaybackController.swift;
+			path = VibeAmp/Playback/PlaybackController.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3CEED0C5545DC260BB233806 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = ArtworkView.swift;
+			path = VibeAmp/Views/Artwork/ArtworkView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5C8446C49C003D521B5A0E17 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = RetroWindowChrome.swift;
+			path = VibeAmp/Views/Components/RetroWindowChrome.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		F338BAAE8D4CFB778C3F8508 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = EqualizerView.swift;
+			path = VibeAmp/Views/Equalizer/EqualizerView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		B1A20A02DC440A2FCADCD10D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = LogView.swift;
+			path = VibeAmp/Views/Log/LogView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		6F9F41F1E8057DCB5243FB93 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = MenuBarPopoverView.swift;
+			path = VibeAmp/Views/MenuBar/MenuBarPopoverView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		189EC0779DBC542D2EC8CF23 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = PlayerView.swift;
+			path = VibeAmp/Views/Player/PlayerView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		C15D1E1870D7821B3B120724 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = PlaylistView.swift;
+			path = VibeAmp/Views/Playlist/PlaylistView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		720FA396E7B6B8A9241B4389 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = SearchView.swift;
+			path = VibeAmp/Views/Search/SearchView.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		1DFC722B236AA5C77F444B00 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = VibeTheme.swift;
+			path = VibeAmp/Views/Theme/VibeTheme.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		82CC0075E3C221FA0F2B9715 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = RetroWindow.swift;
+			path = VibeAmp/Windowing/RetroWindow.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7102B9A53BD117BB8C47C55A = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = WindowDefinition.swift;
+			path = VibeAmp/Windowing/WindowDefinition.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		3ABFBA8CDDDD398D8519D6ED = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = WindowManager.swift;
+			path = VibeAmp/Windowing/WindowManager.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		67E36484B20ECB211521B71D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = WindowSnappingCoordinator.swift;
+			path = VibeAmp/Windowing/WindowSnappingCoordinator.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A4700196BD54CF052F5550A2 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = ProcessRunner.swift;
+			path = VibeAmp/YouTube/ProcessRunner.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		41ECF3DC7188D1D2673F4C02 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = YTDLPManager.swift;
+			path = VibeAmp/YouTube/YTDLPManager.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		1C516B1B2B088930E7DC823B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = YTDLPModels.swift;
+			path = VibeAmp/YouTube/YTDLPModels.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		DEAE6ADE68DBDF9196FD7817 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = YouTubeService.swift;
+			path = VibeAmp/YouTube/YouTubeService.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		7EB77E5F18366E2105128BE9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = ModelParsingTests.swift;
+			path = VibeAmpTests/ModelParsingTests.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		5FB215537C7965C6E62EBA9F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = QueueTests.swift;
+			path = VibeAmpTests/QueueTests.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		1A5F723FF7E0648C74236E7F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = WindowingTests.swift;
+			path = VibeAmpTests/WindowingTests.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		0D16C11C00C25E13A46ED608 = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			name = Assets.xcassets;
+			path = VibeAmp/Resources/Assets.xcassets;
+			sourceTree = "SOURCE_ROOT";
+		};
+		A16FADAEA4AA050FDDC799C9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = ProcessRunnerTests.swift;
+			path = VibeAmpTests/ProcessRunnerTests.swift;
+			sourceTree = "SOURCE_ROOT";
+		};
+		8D2BCEFE569FDD47B23F604B = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.application";
+			includeInIndex = 0;
+			path = VibeAmp.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		6FD11958C0B5F650DCD3FB9A = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.cfbundle";
+			includeInIndex = 0;
+			path = VibeAmpTests.xctest;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		EEC2F1AC13A2EF56FCB51B0B = {
+			isa = PBXBuildFile;
+			fileRef = CC6437533D3BF97F62C63A89;
+		};
+		F3CF268FE3D0BDA7DCF51EC6 = {
+			isa = PBXBuildFile;
+			fileRef = B3610C17518919143740FAEA;
+		};
+		23D02AA1BF13A231073520BE = {
+			isa = PBXBuildFile;
+			fileRef = FCC00E722247B91428AFBC88;
+		};
+		269955CEB1D673AD61622971 = {
+			isa = PBXBuildFile;
+			fileRef = 266A56FD94FBBB34C79DBF93;
+		};
+		DED7C1708586AD276ABEDF43 = {
+			isa = PBXBuildFile;
+			fileRef = 4D1BEB6520939D77C978BE4F;
+		};
+		8FE0C1BD14566F3F3D779494 = {
+			isa = PBXBuildFile;
+			fileRef = FECBA8B74322AE142EF94760;
+		};
+		5AB62EF849A6DB3B1AB3844C = {
+			isa = PBXBuildFile;
+			fileRef = CD4C4637FE174D3D8BF86A29;
+		};
+		C7F41C67DB649656E6DC9027 = {
+			isa = PBXBuildFile;
+			fileRef = A2AB8A9D49E6205EF9A0A70F;
+		};
+		0D0B14BCF247BCC2BB3B3525 = {
+			isa = PBXBuildFile;
+			fileRef = AA059F03067DD3794AE1BDA1;
+		};
+		D14F24B0538C15665F82EC98 = {
+			isa = PBXBuildFile;
+			fileRef = D5DD338AB78BEA7F65D856A7;
+		};
+		CACD51F1E7083DF0C25AB27B = {
+			isa = PBXBuildFile;
+			fileRef = 8D9399628BD0F49953E42C43;
+		};
+		1CB27D37CD84F478F928F861 = {
+			isa = PBXBuildFile;
+			fileRef = FFA4AC20E66A109B9CF4EC5F;
+		};
+		864C37F3F05E5A8CE23AC94C = {
+			isa = PBXBuildFile;
+			fileRef = 3CEED0C5545DC260BB233806;
+		};
+		F0E372890EF7281EE3971F9A = {
+			isa = PBXBuildFile;
+			fileRef = 5C8446C49C003D521B5A0E17;
+		};
+		6653F79BE8A19D2FAEB369ED = {
+			isa = PBXBuildFile;
+			fileRef = F338BAAE8D4CFB778C3F8508;
+		};
+		BB43807DDC359AD3B99D4540 = {
+			isa = PBXBuildFile;
+			fileRef = B1A20A02DC440A2FCADCD10D;
+		};
+		2ED564D28328CADB6625F2B2 = {
+			isa = PBXBuildFile;
+			fileRef = 6F9F41F1E8057DCB5243FB93;
+		};
+		46A6F664F4C1EAACD178CDD8 = {
+			isa = PBXBuildFile;
+			fileRef = 189EC0779DBC542D2EC8CF23;
+		};
+		F12F0F1BAA26ABE0D0DF3E1B = {
+			isa = PBXBuildFile;
+			fileRef = C15D1E1870D7821B3B120724;
+		};
+		D0A834E171369850CBE61B37 = {
+			isa = PBXBuildFile;
+			fileRef = 720FA396E7B6B8A9241B4389;
+		};
+		8D4CB242DC43A6D8B151EF50 = {
+			isa = PBXBuildFile;
+			fileRef = 1DFC722B236AA5C77F444B00;
+		};
+		42EA23A472452D9A67C70E5C = {
+			isa = PBXBuildFile;
+			fileRef = 82CC0075E3C221FA0F2B9715;
+		};
+		B6F02D9AE664ADFE7DC2843E = {
+			isa = PBXBuildFile;
+			fileRef = 7102B9A53BD117BB8C47C55A;
+		};
+		6489BC4C323036C7271AEF53 = {
+			isa = PBXBuildFile;
+			fileRef = 3ABFBA8CDDDD398D8519D6ED;
+		};
+		899DFE6E3EF16853AB2AD8E5 = {
+			isa = PBXBuildFile;
+			fileRef = 67E36484B20ECB211521B71D;
+		};
+		08B4C52CE6704032925120E7 = {
+			isa = PBXBuildFile;
+			fileRef = A4700196BD54CF052F5550A2;
+		};
+		9041A06E0FB24AF2458B5720 = {
+			isa = PBXBuildFile;
+			fileRef = 41ECF3DC7188D1D2673F4C02;
+		};
+		BD9ACB0517794A81C0DB8ABD = {
+			isa = PBXBuildFile;
+			fileRef = 1C516B1B2B088930E7DC823B;
+		};
+		85C42B38FDD52D667F788C31 = {
+			isa = PBXBuildFile;
+			fileRef = DEAE6ADE68DBDF9196FD7817;
+		};
+		540A68F89932D110AE2E9F38 = {
+			isa = PBXBuildFile;
+			fileRef = 7EB77E5F18366E2105128BE9;
+		};
+		B814A8AB5A6A930F6B4EEB1C = {
+			isa = PBXBuildFile;
+			fileRef = 5FB215537C7965C6E62EBA9F;
+		};
+		63F3CA2447BF0286477D6FF2 = {
+			isa = PBXBuildFile;
+			fileRef = 1A5F723FF7E0648C74236E7F;
+		};
+		52C2AB02E271ADB64896ABD8 = {
+			isa = PBXBuildFile;
+			fileRef = A16FADAEA4AA050FDDC799C9;
+		};
+		79D4FA0E8511866808DEC3B4 = {
+			isa = PBXBuildFile;
+			fileRef = 0D16C11C00C25E13A46ED608;
+		};
+		5E84C7160F1092E8F3028355 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EEC2F1AC13A2EF56FCB51B0B,
+				F3CF268FE3D0BDA7DCF51EC6,
+				23D02AA1BF13A231073520BE,
+				269955CEB1D673AD61622971,
+				DED7C1708586AD276ABEDF43,
+				8FE0C1BD14566F3F3D779494,
+				5AB62EF849A6DB3B1AB3844C,
+				C7F41C67DB649656E6DC9027,
+				0D0B14BCF247BCC2BB3B3525,
+				D14F24B0538C15665F82EC98,
+				CACD51F1E7083DF0C25AB27B,
+				1CB27D37CD84F478F928F861,
+				864C37F3F05E5A8CE23AC94C,
+				F0E372890EF7281EE3971F9A,
+				6653F79BE8A19D2FAEB369ED,
+				BB43807DDC359AD3B99D4540,
+				2ED564D28328CADB6625F2B2,
+				46A6F664F4C1EAACD178CDD8,
+				F12F0F1BAA26ABE0D0DF3E1B,
+				D0A834E171369850CBE61B37,
+				8D4CB242DC43A6D8B151EF50,
+				42EA23A472452D9A67C70E5C,
+				B6F02D9AE664ADFE7DC2843E,
+				6489BC4C323036C7271AEF53,
+				899DFE6E3EF16853AB2AD8E5,
+				08B4C52CE6704032925120E7,
+				9041A06E0FB24AF2458B5720,
+				BD9ACB0517794A81C0DB8ABD,
+				85C42B38FDD52D667F788C31
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DA1127DD0B6AE34CBD3DAE07 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		30D98EF62113641B52F5B7DD = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				79D4FA0E8511866808DEC3B4
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2013BFA4F2816CE6E88C1A2C = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				540A68F89932D110AE2E9F38,
+				B814A8AB5A6A930F6B4EEB1C,
+				63F3CA2447BF0286477D6FF2,
+				52C2AB02E271ADB64896ABD8
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AA8D987EF47F38302D92006 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6A94467382B1D2A64BA7BA61 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6B2EABB9250833A4E0B3B11 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 70B1FD35513AFA45AAE675E5;
+			buildPhases = (
+				5E84C7160F1092E8F3028355,
+				DA1127DD0B6AE34CBD3DAE07,
+				30D98EF62113641B52F5B7DD,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = VibeAmp;
+			productName = VibeAmp;
+			productReference = 8D2BCEFE569FDD47B23F604B;
+			productType = "com.apple.product-type.application";
+		};
+		92B76ED6EF34469AC30676A8 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 280907B6B471AB34DB9E6960;
+			buildPhases = (
+				2013BFA4F2816CE6E88C1A2C,
+				5AA8D987EF47F38302D92006,
+				6A94467382B1D2A64BA7BA61,
+			);
+			buildRules = ();
+			dependencies = (
+				C1E727EC20296AE43FA64B95,
+			);
+			name = VibeAmpTests;
+			productName = VibeAmpTests;
+			productReference = 6FD11958C0B5F650DCD3FB9A;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C1E727EC20296AE43FA64B95 = {
+			isa = PBXTargetDependency;
+			target = D6B2EABB9250833A4E0B3B11;
+			targetProxy = 1522845990038B3AE059B2CB;
+		};
+		1522845990038B3AE059B2CB = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 68D69C2A0BD703D72E28EDAD;
+			proxyType = 1;
+			remoteGlobalIDString = D6B2EABB9250833A4E0B3B11;
+			remoteInfo = VibeAmp;
+		};
+		7D2811BDE7CEF7224D362561 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				687E6A61460ED98F7478F186,
+				C3FEA3E2F47AC48AFBCFCFDB,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		70B1FD35513AFA45AAE675E5 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D2268B2E5576F5FB6777F5D9,
+				AB157707D1F3D948BC3D64EB,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		280907B6B471AB34DB9E6960 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B0454C7EF68EB01CF8A2B57,
+				F50A85AC1C5EF43771F03107,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		687E6A61460ED98F7478F186 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				CURRENT_PROJECT_VERSION = 1;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		C3FEA3E2F47AC48AFBCFCFDB = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				CURRENT_PROJECT_VERSION = 1;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		D2268B2E5576F5FB6777F5D9 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = VibeAmp;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_LSMinimumSystemVersion = 15.0;
+				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vibeamp.app";
+				PRODUCT_NAME = VibeAmp;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				ENABLE_TESTABILITY = YES;
+			};
+			name = Debug;
+		};
+		AB157707D1F3D948BC3D64EB = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = VibeAmp;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_LSMinimumSystemVersion = 15.0;
+				INFOPLIST_KEY_NSMainStoryboardFile = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vibeamp.app";
+				PRODUCT_NAME = VibeAmp;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				ENABLE_TESTABILITY = YES;
+			};
+			name = Release;
+		};
+		3B0454C7EF68EB01CF8A2B57 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vibeamp.app.tests";
+				PRODUCT_NAME = VibeAmpTests;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				ENABLE_TESTABILITY = YES;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VibeAmp.app/Contents/MacOS/VibeAmp";
+			};
+			name = Debug;
+		};
+		F50A85AC1C5EF43771F03107 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vibeamp.app.tests";
+				PRODUCT_NAME = VibeAmpTests;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				ENABLE_TESTABILITY = YES;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/VibeAmp.app/Contents/MacOS/VibeAmp";
+			};
+			name = Release;
+		};
+	};
+	rootObject = 68D69C2A0BD703D72E28EDAD;
+}
