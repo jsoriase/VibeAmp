@@ -45,6 +45,8 @@ struct VibeAmpApp: App {
                     .keyboardShortcut("a", modifiers: [.command, .option])
                 Divider()
                 Button("Show All Windows") { delegate.appState.windows.showAll() }
+                Button("Reset Layout") { delegate.appState.windows.resetLayout() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
             }
         }
     }
@@ -68,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func createWindows() {
         func hosted<Content: View>(_ view: Content) -> NSView {
-            let hosting = NSHostingView(rootView: view
+            let hosting = RetroHostingView(rootView: view
                 .environment(appState)
                 .environment(appState.queue)
                 .environment(appState.playback)
@@ -76,8 +78,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 .environment(appState.log)
                 .environment(appState.windows)
                 .environment(appState.ytdlp)
+                // The window is .titled + .fullSizeContentView, so AppKit hands
+                // the hosting view a top safe-area inset the height of a native
+                // title bar. That pushed every module's content down under our
+                // own retro header — the "double title bar" — and clipped the
+                // same amount off the bottom. We draw our own chrome, so we
+                // want none of it. Note this has to be done on the SwiftUI side:
+                // setting `hosting.safeAreaRegions = []` instead sends AppKit
+                // into an endless layout/constraint pass and aborts the app.
+                .ignoresSafeArea()
             )
-            hosting.translatesAutoresizingMaskIntoConstraints = false
+            // WindowManager owns every frame. Left to itself the hosting view
+            // pushes its SwiftUI ideal size onto the window as a minimum
+            // content size, which silently grew PLAYER to 235pt and EQUALIZER
+            // to 200pt and made the docked column overlap itself.
+            hosting.sizingOptions = []
+            hosting.translatesAutoresizingMaskIntoConstraints = true
+            hosting.autoresizingMask = [.width, .height]
             return hosting
         }
 

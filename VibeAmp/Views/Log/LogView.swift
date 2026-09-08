@@ -45,7 +45,7 @@ struct LogView: View {
             }
             .padding(8)
         }
-        .frame(width: 380, height: 210)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func color(for level: LogLevel) -> Color {

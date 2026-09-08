@@ -10,16 +10,40 @@ import Observation
 final class WindowManager: NSObject {
     var visible: [WindowRole: Bool] = [:]
     var shaded: [WindowRole: Bool] = [:]
+    /// Focused module, so the chrome can dim inactive title bars.
+    var keyRole: WindowRole?
 
     private var windows: [WindowRole: RetroWindow] = [:]
     private var lastFrames: [WindowRole: NSRect] = [:]
-    private var programmatic: Set<WindowRole> = []
-    private var userDragRole: WindowRole?
-    private var attachments: [WindowRole: WindowRole] = [:]
     private var expandedSizes: [WindowRole: NSSize] = [:]
-    private var snapWorkItems: [WindowRole: DispatchWorkItem] = [:]
     private var stateStore: StateStore?
     private var log: AppLog?
+
+    /// Origins we set ourselves. A matching windowDidMove is our own echo, not
+    /// the user dragging.
+    private var expectedOrigins: [WindowRole: CGPoint] = [:]
+
+    /// Everything a drag needs, captured once when it starts.
+    ///
+    /// Winamp computes the offset from where the mouse went down, not from the
+    /// previous frame. Accumulating per-frame deltas — what this used to do —
+    /// drifts, and fights AppKit, which is recomputing the dragged window's
+    /// position from the same mouse-down anchor on every event.
+    private struct DragSession {
+        let role: WindowRole
+        /// Screen position of the pointer when the drag began. Winamp measures
+        /// the offset from here, never from the previous frame.
+        let mouseStart: CGPoint
+        /// Where each travelling window sat when the drag began.
+        let startOrigins: [WindowRole: CGPoint]
+        let sizes: [WindowRole: CGSize]
+        /// Frames of the windows staying put, to snap against.
+        let stationary: [CGRect]
+        /// The dragged window's own origin at drag start.
+        let anchor: CGPoint
+        let workArea: CGRect
+    }
+    private var drag: DragSession?
 
     var onPlayerClose: (() -> Void)?
 
@@ -42,10 +66,13 @@ final class WindowManager: NSObject {
         shaded[role] ?? false
     }
 
+    func isKey(_ role: WindowRole) -> Bool {
+        keyRole == role
+    }
+
     /// Creates all six windows. `hosts` maps each role to its SwiftUI content.
     func createAll(hosts: [WindowRole: NSView]) {
         guard windows.isEmpty else { return }
-        restoreAttachments()
 
         let primary = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let fallback = defaultFrames(in: primary)
@@ -105,11 +132,11 @@ final class WindowManager: NSObject {
     }
 
     private func defaultFrames(in screenFrame: NSRect) -> [WindowRole: NSRect] {
-        // Center the ~1156×584 cluster reasonably on the current display.
-        let clusterWidth: CGFloat = 776 + 380
+        // Centre the three-column cluster on the current display.
+        let clusterWidth = WindowLayout.clusterWidth
         let originX = screenFrame.minX + max(20, (screenFrame.width - clusterWidth) / 2)
-        // AppKit origin is bottom-left: place cluster so its top sits ~60px below menu bar.
-        let topY = screenFrame.maxY - 40
+        // AppKit origin is bottom-left: place cluster so its top sits just below the menu bar.
+        let topY = screenFrame.maxY - 20
         var frames: [WindowRole: NSRect] = [:]
         for role in WindowRole.allCases {
             let size = role.defaultSize
@@ -157,8 +184,13 @@ final class WindowManager: NSObject {
         saveLayout()
     }
 
+    /// Winamp's minimize sends the whole player to the taskbar, and that is
+    /// what this does: NSWindow.miniaturize is a no-op on the borderless
+    /// windows we need for live snapping, so the app hides instead and comes
+    /// back from the Dock. Verified — the miniaturize call did nothing.
     func minimize(_ role: WindowRole) {
-        windows[role]?.miniaturize(nil)
+        persistNow()
+        NSApp.hide(nil)
     }
 
     func close(_ role: WindowRole) {
@@ -170,6 +202,25 @@ final class WindowManager: NSObject {
         windows[role]?.orderOut(nil)
         visible[role] = false
         saveLayout()
+    }
+
+    /// Re-tiles every module into the default cluster on the active screen.
+    /// The escape hatch when a layout ends up scattered or off-screen.
+    func resetLayout() {
+        let screen = NSApp.keyWindow?.screen?.visibleFrame
+            ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let frames = defaultFrames(in: screen)
+        for role in WindowRole.allCases {
+            guard let win = windows[role], let frame = frames[role] else { continue }
+            if shaded[role] == true {
+                shaded[role] = false
+                expandedSizes[role] = frame.size
+            }
+            setFrame(frame, for: role, on: win)
+        }
+        saveLayout()
+        log?.info("Layout reset to default cluster")
     }
 
     func focusSearch() {
@@ -191,86 +242,153 @@ final class WindowManager: NSObject {
 
     private func setShaded(_ shade: Bool, for role: WindowRole) {
         guard let win = windows[role] else { return }
-        let currentlyShaded = shaded[role] ?? false
-        guard shade != currentlyShaded else { return }
-        var frame = win.frame
-        if shade {
-            expandedSizes[role] = frame.size
-            let targetHeight = WindowLayout.shadeHeight
-            let delta = frame.height - targetHeight
-            frame.size.height = targetHeight
-            // Keep the top edge fixed (AppKit grows down otherwise).
-            frame.origin.y += delta
-            programmatic.insert(role)
-            win.setFrame(frame, display: true)
-            lastFrames[role] = frame
-            shaded[role] = true
-            // Pull windows docked underneath up to meet the new bottom edge.
-            let previousBottom = frame.origin.y + targetHeight + delta
-            for (child, parent) in attachments where parent == role {
-                guard let childWin = windows[child] else { continue }
-                if childWin.frame.origin.y + childWin.frame.height < previousBottom - 2
-                    && childWin.frame.origin.y < frame.origin.y {
-                    // Child sits below: move up by the collapsed delta.
-                    moveRoles([child] + descendants(of: child), by: CGVector(dx: 0, dy: delta))
-                } else if childWin.frame.origin.y >= previousBottom - 2 {
-                    // Child was attached at the bottom edge precisely.
-                    moveRoles([child] + descendants(of: child), by: CGVector(dx: 0, dy: delta))
-                }
-            }
-        } else {
-            let restored = expandedSizes[role] ?? role.defaultSize
-            let delta = restored.height - frame.height
-            frame.size.height = restored.height
-            frame.origin.y -= delta
-            programmatic.insert(role)
-            win.setFrame(frame, display: true)
-            lastFrames[role] = frame
-            shaded[role] = false
-            // Push docked-below windows back down.
-            for (child, parent) in attachments where parent == role {
-                guard windows[child] != nil else { continue }
-                moveRoles([child] + descendants(of: child), by: CGVector(dx: 0, dy: -delta))
-            }
+        guard shade != (shaded[role] ?? false) else { return }
+        let frame = win.frame
+        let oldTop = frame.maxY
+        let oldHeight = frame.height
+
+        // Which windows are docked where, *before* the size changes.
+        let graph = WindowSnappingCoordinator.edgeGraph(visibleFrames())
+
+        if shade { expandedSizes[role] = frame.size }
+        let targetHeight = shade ? WindowLayout.shadeHeight : (expandedSizes[role] ?? role.defaultSize).height
+
+        setFrame(NSRect(x: frame.minX, y: oldTop - targetHeight, width: frame.width, height: targetHeight), for: role, on: win)
+        // AppKit can clamp the height (titled windows have a floor); re-pin the
+        // top edge to whatever height we actually got so nothing drifts.
+        var settled = win.frame
+        settled.origin.y = oldTop - settled.height
+        setFrame(settled, for: role, on: win)
+        shaded[role] = shade
+
+        // Walk the column: everything resting under the collapsed window rides
+        // up by the height it lost, and their own dependents follow.
+        let sizeDiff = [role.rawValue: CGSize(width: 0, height: win.frame.height - oldHeight)]
+        let diffs = WindowSnappingCoordinator.positionDiff(graph: graph, sizeDiff: sizeDiff)
+        var moves: [(WindowRole, NSPoint)] = []
+        for (key, delta) in diffs where delta.dy != 0 || delta.dx != 0 {
+            guard let other = WindowRole(rawValue: key), other != role, let otherWin = windows[other] else { continue }
+            moves.append((other, NSPoint(x: otherWin.frame.minX + delta.dx, y: otherWin.frame.minY + delta.dy)))
         }
+        moveTogether(moves)
         saveLayout()
     }
 
-    // MARK: - Attachment graph + movement
-
-    private func descendants(of role: WindowRole) -> [WindowRole] {
-        var stringMap: [String: String] = [:]
-        for (child, parent) in attachments {
-            stringMap[child.rawValue] = parent.rawValue
-        }
-        let strings = WindowSnappingCoordinator.descendants(of: role.rawValue, in: stringMap)
-        return strings.compactMap { WindowRole(rawValue: $0) }
+    private func setOrigin(_ origin: NSPoint, for role: WindowRole, on win: RetroWindow) {
+        expectedOrigins[role] = origin
+        win.setFrameOrigin(origin)
+        // Deliberately not reading `win.frame` back: every read is a round trip
+        // to the window server, and doing five of them per mouse-move is what
+        // made docked windows visibly trail the one under the cursor.
+        lastFrames[role] = NSRect(origin: origin, size: lastFrames[role]?.size ?? win.frame.size)
     }
 
-    private func moveRoles(_ roles: [WindowRole], by delta: CGVector) {
-        guard delta.dx != 0 || delta.dy != 0 else { return }
-        for role in roles {
+    private func setFrame(_ frame: NSRect, for role: WindowRole, on win: RetroWindow) {
+        expectedOrigins[role] = frame.origin
+        win.setFrame(frame, display: true)
+        lastFrames[role] = win.frame
+    }
+
+    /// Moves several windows in one pass.
+    ///
+    /// No NSDisableScreenUpdates bracket: it is deprecated precisely because it
+    /// costs more than it saves, and since 10.11 AppKit already coalesces the
+    /// moves made in a single turn of the run loop. The win here is upstream —
+    /// nothing in this loop talks to the window server except the move itself.
+    private func moveTogether(_ moves: [(WindowRole, NSPoint)]) {
+        for (role, origin) in moves {
             guard let win = windows[role] else { continue }
-            var frame = win.frame
-            frame.origin.x += delta.dx
-            frame.origin.y += delta.dy
-            programmatic.insert(role)
-            win.setFrameOrigin(frame.origin)
-            lastFrames[role] = win.frame
+            setOrigin(origin, for: role, on: win)
         }
     }
 
-    private func restoreAttachments() {
-        let valid = Set(WindowRole.allCases.map(\.rawValue))
-        let raw: [String: String] = stateStore?.get([String: String].self, key: "attachments", fallback: [:])
-            ?? Dictionary(uniqueKeysWithValues: WindowLayout.defaultAttachments.map { ($0.key.rawValue, $0.value.rawValue) })
-        let clean = WindowSnappingCoordinator.sanitized(raw, validRoles: valid)
-        attachments = [:]
-        for (child, parent) in clean {
-            if let c = WindowRole(rawValue: child), let p = WindowRole(rawValue: parent) {
-                attachments[c] = p
+    private func visibleFrames() -> [String: CGRect] {
+        var frames: [String: CGRect] = [:]
+        for (role, win) in windows where win.isVisible {
+            frames[role.rawValue] = win.frame
+        }
+        return frames
+    }
+
+    // MARK: - Dragging
+
+    /// Pointer went down on a title bar.
+    ///
+    /// Winamp works out which windows travel together right here, from where
+    /// they are sitting: everything transitively touching the one you grabbed.
+    /// And only the main window carries a group — pick up the equalizer or the
+    /// playlist and it moves alone, however it is docked.
+    func dragBegin(_ role: WindowRole, mouse: CGPoint) {
+        var frames = visibleFrames()
+        guard let own = frames[role.rawValue] else { return }
+
+        let groupKeys: Set<String> = role == .player
+            ? WindowSnappingCoordinator.connectedGroup(startingAt: role.rawValue, among: frames)
+            : [role.rawValue]
+        let group = Set(groupKeys.compactMap(WindowRole.init(rawValue:)))
+
+        var startOrigins: [WindowRole: CGPoint] = [:]
+        var sizes: [WindowRole: CGSize] = [:]
+        var stationary: [CGRect] = []
+        for (key, frame) in frames {
+            guard let other = WindowRole(rawValue: key) else { continue }
+            if group.contains(other) {
+                startOrigins[other] = frame.origin
+                sizes[other] = frame.size
+            } else {
+                stationary.append(frame)
             }
         }
+        frames.removeAll()
+
+        drag = DragSession(
+            role: role,
+            mouseStart: mouse,
+            startOrigins: startOrigins,
+            sizes: sizes,
+            stationary: stationary,
+            anchor: own.origin,
+            workArea: windows[role]?.screen?.visibleFrame
+                ?? NSScreen.main?.visibleFrame
+                ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+        )
+    }
+
+    /// Pointer moved. Everything is derived from the mouse-down anchor, so the
+    /// group can never drift away from the cursor over a long drag.
+    func dragUpdate(_ role: WindowRole, mouse: CGPoint) {
+        guard let session = drag, session.role == role else { return }
+
+        let proposed = CGVector(dx: mouse.x - session.mouseStart.x, dy: mouse.y - session.mouseStart.y)
+
+        let proposedFrames = session.startOrigins.map { member, origin in
+            CGRect(origin: CGPoint(x: origin.x + proposed.dx, y: origin.y + proposed.dy),
+                   size: session.sizes[member] ?? .zero)
+        }
+
+        // The group snaps as a unit — any member reaching a stationary window
+        // pulls the whole set into place — and its bounding box stays on screen.
+        let snapDiff = WindowSnappingCoordinator.snapDiffManyToMany(proposedFrames, session.stationary)
+        let withinDiff = WindowSnappingCoordinator.snapWithinDiff(
+            WindowSnappingCoordinator.boundingBox(proposedFrames),
+            workArea: session.workArea
+        )
+        let final = WindowSnappingCoordinator.applyMultipleDiffs(proposed, [snapDiff, withinDiff])
+
+        var moves: [(WindowRole, NSPoint)] = []
+        moves.reserveCapacity(session.startOrigins.count)
+        for (member, origin) in session.startOrigins {
+            let target = NSPoint(x: (origin.x + final.dx).rounded(), y: (origin.y + final.dy).rounded())
+            if windows[member]?.frame.origin != target { moves.append((member, target)) }
+        }
+        moveTogether(moves)
+    }
+
+    func dragEnd(_ role: WindowRole) {
+        guard drag?.role == role else { return }
+        drag = nil
+        for (member, win) in windows { lastFrames[member] = win.frame }
+        saveLayout()
     }
 
     // MARK: - Persistence
@@ -288,14 +406,11 @@ final class WindowManager: NSObject {
             vis[role.rawValue] = visible[role] ?? true
             sh[role.rawValue] = shaded[role] ?? false
         }
-        var attach: [String: String] = [:]
-        for (child, parent) in attachments {
-            attach[child.rawValue] = parent.rawValue
-        }
         store.set(key: "windowPositions", value: positions)
         store.set(key: "windowVisible", value: vis)
         store.set(key: "windowShaded", value: sh)
-        store.set(key: "attachments", value: attach)
+        // No "attachments" key any more: which windows are docked is a fact
+        // about where they sit, recomputed from geometry whenever it matters.
     }
 
     func persistNow() {
@@ -314,9 +429,7 @@ final class WindowManager: NSObject {
                 desired: fallback.origin,
                 in: screen
             )
-            programmatic.insert(role)
-            win.setFrameOrigin(clamped)
-            lastFrames[role] = win.frame
+            setOrigin(clamped, for: role, on: win)
         }
     }
 
@@ -327,70 +440,17 @@ final class WindowManager: NSObject {
     }
 }
 
-// MARK: - NSWindowDelegate (snapping + docking)
+// MARK: - NSWindowDelegate
 
 extension WindowManager: NSWindowDelegate {
     func windowDidMove(_ notification: Notification) {
+        // Dragging is driven by the chrome's gesture, so this only records
+        // moves AppKit makes on its own (Spaces, display changes).
         guard let win = notification.object as? NSWindow,
               let role = (win as? RetroWindow)?.role ?? role(for: win)
         else { return }
-        let frame = win.frame
-        let previous = lastFrames[role] ?? frame
-        lastFrames[role] = frame
-
-        if programmatic.contains(role) {
-            programmatic.remove(role)
-            return
-        }
-
-        // User drag: detach from parent (mirrors Electron: detach on move,
-        // since will-move doesn't fire reliably), move descendants along.
-        attachments.removeValue(forKey: role)
-        userDragRole = role
-        let delta = CGVector(dx: frame.origin.x - previous.origin.x, dy: frame.origin.y - previous.origin.y)
-        if delta.dx != 0 || delta.dy != 0 {
-            moveRoles(descendants(of: role), by: delta)
-        }
-
-        // Debounced snap at settle — avoids jitter mid-drag.
-        snapWorkItems[role]?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            Task { @MainActor in
-                self.finishDrag(for: role)
-            }
-        }
-        snapWorkItems[role] = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
-    }
-
-    private func finishDrag(for role: WindowRole) {
-        guard userDragRole == role, let win = windows[role] else { return }
-        userDragRole = nil
-        let frame = win.frame
-        let screenFrame = win.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? frame
-        let descendantSet = Set(descendants(of: role).map(\.rawValue) + [role.rawValue])
-
-        var others: [String: CGRect] = [:]
-        for (otherRole, otherWin) in windows where otherRole != role {
-            if descendantSet.contains(otherRole.rawValue) { continue }
-            if !otherWin.isVisible { continue }
-            others[otherRole.rawValue] = otherWin.frame
-        }
-
-        let result = WindowSnappingCoordinator.snap(
-            moving: frame,
-            others: others,
-            workArea: screenFrame
-        )
-        let delta = CGVector(dx: result.origin.x - frame.origin.x, dy: result.origin.y - frame.origin.y)
-        if delta.dx != 0 || delta.dy != 0 {
-            moveRoles([role] + descendants(of: role), by: delta)
-        }
-        if let target = result.target, let targetRole = WindowRole(rawValue: target) {
-            attachments[role] = targetRole
-        }
-        saveLayout()
+        lastFrames[role] = win.frame
+        if drag == nil { saveLayout() }
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -409,7 +469,17 @@ extension WindowManager: NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        // No-op: placeholder for future active-window highlighting.
+        guard let win = notification.object as? NSWindow,
+              let role = (win as? RetroWindow)?.role ?? role(for: win)
+        else { return }
+        keyRole = role
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        guard let win = notification.object as? NSWindow,
+              let role = (win as? RetroWindow)?.role ?? role(for: win)
+        else { return }
+        if keyRole == role { keyRole = nil }
     }
 
     private func role(for window: NSWindow) -> WindowRole? {

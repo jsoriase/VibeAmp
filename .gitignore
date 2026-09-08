@@ -125,3 +125,6 @@ TAGS
 *.orig
 *.rej
 *.log
+
+# --- Build output (scripts/build.sh) ---
+dist/

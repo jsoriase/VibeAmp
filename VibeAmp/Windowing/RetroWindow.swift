@@ -9,18 +9,25 @@ final class RetroWindow: NSWindow {
 
     init(role: WindowRole, contentView: NSView, frame: NSRect) {
         self.role = role
+        // Borderless, not .titled. A titled window keeps its own title-bar
+        // strip above the content view, and AppKit drags the window from there
+        // itself — re-anchoring to the window's current position on every
+        // event. Any snap correction we applied was therefore undone by the
+        // next event, pinning the window within a few points of where the drag
+        // started. Owning the gesture is the only way to snap while dragging.
         super.init(
             contentRect: frame,
-            styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
         isMovableByWindowBackground = false
         hasShadow = true
         isReleasedWhenClosed = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // Shade collapses to the header height; without this AppKit refuses to
+        // shrink a titled window that far.
+        minSize = NSSize(width: 200, height: WindowLayout.titleBarHeight)
         // Hide traffic lights; our SwiftUI chrome provides min/shade/close.
         for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             standardWindowButton(buttonType)?.isHidden = true
@@ -38,37 +45,12 @@ final class RetroWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-/// NSView that starts a native window drag for any mouse-down inside it.
-/// Used as the background of our custom title bars.
-final class WindowDragArea: NSView {
-    private var dragOffset: NSPoint?
-
-    override func mouseDown(with event: NSEvent) {
-        guard let window else { return }
-        // Manual drag keeps compatibility across SDKs (avoids relying on
-        // performWindowDrag) and still feels native for small panels.
-        let mouseScreen = NSEvent.mouseLocation
-        let origin = window.frame.origin
-        dragOffset = NSPoint(x: mouseScreen.x - origin.x, y: mouseScreen.y - origin.y)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let window, let offset = dragOffset else { return }
-        let mouseScreen = NSEvent.mouseLocation
-        window.setFrameOrigin(NSPoint(x: mouseScreen.x - offset.x, y: mouseScreen.y - offset.y))
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        dragOffset = nil
-    }
-}
-
-struct WindowDragGestureView: NSViewRepresentable {
-    func makeNSView(context: Context) -> WindowDragArea {
-        let view = WindowDragArea()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }
-
-    func updateNSView(_ nsView: WindowDragArea, context: Context) {}
+/// Hosting view that responds to the click that also focuses its window.
+///
+/// SwiftUI views decline `acceptsFirstMouse`, so the first click on an
+/// unfocused module was spent activating it: you had to click once to focus a
+/// window and only then could you drag it. These are palette windows — the
+/// first click should just work.
+final class RetroHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

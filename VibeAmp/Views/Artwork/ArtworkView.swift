@@ -36,7 +36,7 @@ struct ArtworkView: View {
             .padding(8)
             // AsyncImage uses the shared URLCache: async load, cached, aspect-preserved.
         }
-        .frame(width: 380, height: 260)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var placeholder: some View {

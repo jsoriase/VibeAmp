@@ -22,10 +22,15 @@ struct PlayerView: View {
                             .foregroundStyle(VibeTheme.lcdGreen)
                             .shadow(color: VibeTheme.lcdGreen.opacity(0.5), radius: 4)
                             .monospacedDigit()
+                            // "00:00" at 28pt needs ~84pt: in the old 80pt column
+                            // it wrapped to two lines, which read as "00:0 / 0"
+                            // and made the whole window overflow its frame.
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
                             .accessibilityLabel("Elapsed time")
                         VisualizerBars(isPlaying: playback.isPlaying)
                     }
-                    .frame(width: 80)
+                    .frame(width: 96)
                     .padding(.trailing, 8)
                     .overlay(Rectangle().frame(width: 1).foregroundStyle(Color.white.opacity(0.12)), alignment: .trailing)
 
@@ -124,16 +129,14 @@ struct PlayerView: View {
 
                 // Module toggles
                 HStack(spacing: 4) {
-                    ModuleToggle(role: .equalizer, label: "EQ")
-                    ModuleToggle(role: .playlist, label: "PL")
-                    ModuleToggle(role: .search, label: "SEARCH")
-                    ModuleToggle(role: .art, label: "ART")
-                    ModuleToggle(role: .log, label: "LOG")
+                    ForEach([WindowRole.equalizer, .playlist, .search, .art, .log], id: \.self) { role in
+                        ModuleToggle(role: role)
+                    }
                 }
             }
             .padding(8)
         }
-        .frame(width: 380, height: 210)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var statusText: String {
@@ -169,14 +172,13 @@ private struct TransportButton: View {
 
 private struct ModuleToggle: View {
     let role: WindowRole
-    let label: String
     @Environment(WindowManager.self) private var windows
 
     var body: some View {
         Button {
             windows.toggle(role)
         } label: {
-            Text(label)
+            Text(role.shortLabel)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 4)

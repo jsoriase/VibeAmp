@@ -133,7 +133,7 @@ struct SearchView: View {
                 fieldFocused = true
             }
         }
-        .frame(width: 380, height: 260)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Debounced search (stale guard + cancellation)

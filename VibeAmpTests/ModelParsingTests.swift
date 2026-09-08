@@ -51,6 +51,65 @@ final class ModelParsingTests: XCTestCase {
         XCTAssertEqual(decoded.gain(for: 600), 0)
     }
 
+    // MARK: - Genre presets
+
+    /// Every curve must cover all ten bands, in range. A short or out-of-range
+    /// array would silently leave bands at whatever the last preset set.
+    func testPresetsAreWellFormed() {
+        XCTAssertFalse(EQPreset.all.isEmpty)
+        for preset in EQPreset.all {
+            XCTAssertEqual(preset.gains.count, EQSettings.frequencies.count, "\(preset.name) has the wrong band count")
+            for gain in preset.gains {
+                XCTAssertTrue(gain >= EQSettings.minGain && gain <= EQSettings.maxGain, "\(preset.name) has \(gain) dB out of range")
+            }
+            XCTAssertTrue(preset.preamp >= EQSettings.minGain && preset.preamp <= EQSettings.maxGain)
+        }
+        XCTAssertEqual(Set(EQPreset.all.map(\.name)).count, EQPreset.all.count, "preset names must be unique")
+    }
+
+    /// Boost-heavy curves need negative preamp headroom or they clip.
+    func testBoostyPresetsPullPreampDown() {
+        for preset in EQPreset.all where preset.gains.contains(where: { $0 >= 6 }) {
+            XCTAssertLessThan(preset.preamp, 0, "\(preset.name) boosts hard but leaves the preamp at \(preset.preamp)")
+        }
+    }
+
+    func testFlatPresetIsFlat() {
+        guard let flat = EQPreset.all.first(where: { $0.name == "FLAT" }) else {
+            return XCTFail("no FLAT preset")
+        }
+        XCTAssertTrue(flat.settings.isFlat)
+        XCTAssertEqual(EQPreset.matching(EQSettings())?.name, "FLAT")
+    }
+
+    /// Applying a preset then reading the name back must round-trip, or the
+    /// picker would label the curve it just loaded as CUSTOM.
+    @MainActor
+    func testApplyingPresetRoundTripsThroughStore() {
+        let store = EQStore()
+        for preset in EQPreset.all {
+            store.apply(preset)
+            XCTAssertEqual(store.presetName, preset.name)
+            XCTAssertEqual(store.settings.preamp, preset.preamp)
+            for (freq, gain) in zip(EQSettings.frequencies, preset.gains) {
+                XCTAssertEqual(store.settings.gain(for: freq), gain, "\(preset.name) @ \(freq) Hz")
+            }
+        }
+    }
+
+    /// Moving any slider off a preset must read as CUSTOM.
+    @MainActor
+    func testNudgingABandReadsAsCustom() {
+        let store = EQStore()
+        guard let rock = EQPreset.all.first(where: { $0.name == "ROCK" }) else {
+            return XCTFail("no ROCK preset")
+        }
+        store.apply(rock)
+        XCTAssertEqual(store.presetName, "ROCK")
+        store.setGain(store.settings.gain(for: 1000) + 0.5, for: 1000)
+        XCTAssertEqual(store.presetName, "CUSTOM")
+    }
+
     func testEQClampAndReset() {
         var settings = EQSettings(preamp: 99)
         XCTAssertEqual(settings.preamp, 12)

@@ -21,43 +21,67 @@ enum WindowRole: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    var defaultSize: CGSize {
+    /// Short label used by the player's module toggles.
+    var shortLabel: String {
         switch self {
-        case .player: return CGSize(width: 380, height: 210)
-        case .equalizer: return CGSize(width: 380, height: 168)
-        case .playlist: return CGSize(width: 380, height: 190)
-        case .search: return CGSize(width: 380, height: 260)
-        case .art: return CGSize(width: 380, height: 260)
-        case .log: return CGSize(width: 380, height: 210)
+        case .player: return "PLR"
+        case .equalizer: return "EQ"
+        case .playlist: return "PL"
+        case .search: return "SEARCH"
+        case .art: return "ART"
+        case .log: return "LOG"
         }
     }
 
-    /// Default offset from the player's origin (top-left cluster).
-    /// Mirrors the original Electron WINDOW_DEFINITIONS layout.
-    var defaultOffset: CGPoint {
+    /// Column width shared by every module so the cluster tiles cleanly.
+    static let columnWidth: CGFloat = 380
+
+    var defaultSize: CGSize {
         switch self {
-        case .player: return CGPoint(x: 0, y: 0)
-        case .equalizer: return CGPoint(x: 0, y: 218)
-        case .playlist: return CGPoint(x: 0, y: 394)
-        case .search: return CGPoint(x: 388, y: 0)
-        case .art: return CGPoint(x: 388, y: 268)
-        case .log: return CGPoint(x: 776, y: 0)
+        case .player: return CGSize(width: Self.columnWidth, height: 212)
+        case .equalizer: return CGSize(width: Self.columnWidth, height: 200)
+        case .playlist: return CGSize(width: Self.columnWidth, height: 224)
+        case .search: return CGSize(width: Self.columnWidth, height: 284)
+        case .art: return CGSize(width: Self.columnWidth, height: 260)
+        case .log: return CGSize(width: Self.columnWidth, height: 224)
+        }
+    }
+
+    /// Default offset from the cluster's top-left corner. Derived from the
+    /// sizes above so the three columns always dock flush — hard-coded values
+    /// drifted out of sync with `defaultSize` and left visible seams.
+    var defaultOffset: CGPoint {
+        let column = Self.columnWidth
+        switch self {
+        case .player:
+            return CGPoint(x: 0, y: 0)
+        case .equalizer:
+            return CGPoint(x: 0, y: WindowRole.player.defaultSize.height)
+        case .playlist:
+            return CGPoint(x: 0, y: WindowRole.player.defaultSize.height + WindowRole.equalizer.defaultSize.height)
+        case .search:
+            return CGPoint(x: column, y: 0)
+        case .art:
+            return CGPoint(x: column, y: WindowRole.search.defaultSize.height)
+        case .log:
+            return CGPoint(x: column * 2, y: 0)
         }
     }
 }
 
 enum WindowLayout {
-    static let snapThreshold: CGFloat = 15
-    // Collapses to exactly the custom header height so only the title bar shows.
-    static let shadeHeight: CGFloat = 24
+    /// Height of the custom Winamp-style header. Everything that needs to know
+    /// how tall a title bar is reads this: the chrome, shade collapse, and the
+    /// window's minimum size.
+    static let titleBarHeight: CGFloat = 24
 
-    static let defaultAttachments: [WindowRole: WindowRole] = [
-        .equalizer: .player,
-        .playlist: .equalizer,
-        .search: .player,
-        .art: .search,
-        .log: .search,
-    ]
+    static let snapThreshold: CGFloat = 15
+
+    /// Collapses to exactly the custom header height so only the title bar shows.
+    static var shadeHeight: CGFloat { titleBarHeight }
+
+    /// Total width of the default three-column cluster.
+    static var clusterWidth: CGFloat { WindowRole.columnWidth * 3 }
 
     /// Default frames for a fresh launch, anchored at the given top-left origin
     /// (AppKit coordinates are bottom-left; callers convert).
