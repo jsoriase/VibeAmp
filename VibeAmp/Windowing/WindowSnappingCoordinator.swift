@@ -108,25 +108,17 @@ enum WindowSnappingCoordinator {
         return CGVector(dx: bestX, dy: bestY)
     }
 
-    /// Keeps a group inside the work area: snaps to an edge when close, and
-    /// pulls it back when it has already been dragged past one.
-    static func snapWithinDiff(_ box: CGRect, workArea: CGRect, threshold: CGFloat = threshold) -> CGVector {
-        var x: CGFloat?
-        var y: CGFloat?
-
-        if box.minX - threshold < workArea.minX {
-            x = workArea.minX
-        } else if box.maxX + threshold > workArea.maxX {
-            x = workArea.maxX - box.width
+    /// Magnetic edges are a small attraction, never a barrier between displays.
+    /// The caller supplies the work area under the pointer on each drag update.
+    static func snapToScreenEdgesDiff(_ box: CGRect, workArea: CGRect, threshold: CGFloat = threshold) -> CGVector {
+        func correction(_ nearEdge: CGFloat, _ farEdge: CGFloat, _ min: CGFloat, _ max: CGFloat) -> CGFloat {
+            let candidates = [min - nearEdge, max - farEdge].filter { abs($0) < threshold }
+            return candidates.min { abs($0) < abs($1) } ?? 0
         }
-
-        if box.minY - threshold < workArea.minY {
-            y = workArea.minY
-        } else if box.maxY + threshold > workArea.maxY {
-            y = workArea.maxY - box.height
-        }
-
-        return CGVector(dx: x.map { $0 - box.minX } ?? 0, dy: y.map { $0 - box.minY } ?? 0)
+        return CGVector(
+            dx: correction(box.minX, box.maxX, workArea.minX, workArea.maxX),
+            dy: correction(box.minY, box.maxY, workArea.minY, workArea.maxY)
+        )
     }
 
     static func boundingBox(_ boxes: [CGRect]) -> CGRect {

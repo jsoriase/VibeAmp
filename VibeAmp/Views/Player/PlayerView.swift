@@ -129,7 +129,7 @@ struct PlayerView: View {
 
                 // Module toggles
                 HStack(spacing: 4) {
-                    ForEach([WindowRole.equalizer, .playlist, .search, .art, .log], id: \.self) { role in
+                    ForEach([WindowRole.equalizer, .playlist, .savedPlaylists, .search, .art, .log], id: \.self) { role in
                         ModuleToggle(role: role)
                     }
                 }

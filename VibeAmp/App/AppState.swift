@@ -9,6 +9,7 @@ import Observation
 @Observable
 final class AppState {
     let store: StateStore
+    let playlists: SavedPlaylists
     let queue: QueueStore
     let eq: EQStore
     let log: AppLog
@@ -20,6 +21,7 @@ final class AppState {
     init() {
         store = StateStore()
         store.load()
+        playlists = SavedPlaylists(store: store)
         queue = QueueStore()
         eq = EQStore()
         log = AppLog()
@@ -119,6 +121,7 @@ final class AppState {
         // Modern shape as well for forward compatibility.
         store.set(key: "eqSettings", value: eq.settings)
         windows.saveLayout()
+        playback.refreshPrefetch()
     }
 
     func persistNow() {
@@ -162,7 +165,7 @@ final class AppState {
     func startup() async {
         restorePersistedState()
         await ytdlp.ensure(log: log)
-        await youtube.configure(binaryURL: ytdlp.binaryURL)
+        await youtube.configure(binaryURL: ytdlp.binaryURL, log: log)
         if case .failed(let message) = ytdlp.status {
             log.error("yt-dlp unavailable: \(message)")
         }

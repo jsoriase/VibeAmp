@@ -5,6 +5,14 @@
 	};
 	objectVersion = 77;
 	objects = {
+		BEAF00123456789000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeAmp/Playback/SegmentedAudio.swift; sourceTree = SOURCE_ROOT; };
+		BEAF00123456789000000002 = { isa = PBXBuildFile; fileRef = BEAF00123456789000000001; };
+		CAACAE123456789000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeAmpTests/YouTubeServiceTests.swift; sourceTree = SOURCE_ROOT; };
+		CAACAE123456789000000002 = { isa = PBXBuildFile; fileRef = CAACAE123456789000000001; };
+		ABCDEF123456789000000011 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeAmp/Views/Playlist/SavedPlaylistsView.swift; sourceTree = SOURCE_ROOT; };
+		ABCDEF123456789000000012 = { isa = PBXBuildFile; fileRef = ABCDEF123456789000000011; };
+		ABCDEF123456789000000001 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VibeAmp/Models/SavedPlaylists.swift; sourceTree = SOURCE_ROOT; };
+		ABCDEF123456789000000002 = { isa = PBXBuildFile; fileRef = ABCDEF123456789000000001; };
 		68D69C2A0BD703D72E28EDAD = {
 			isa = PBXProject;
 			buildConfigurationList = 7D2811BDE7CEF7224D362561;
@@ -42,6 +50,8 @@
 		0B974C97E2ED8C4F9D0878B6 = {
 			isa = PBXGroup;
 			children = (
+				ABCDEF123456789000000001,
+				ABCDEF123456789000000011,
 				E2F6770D4FDDF416ABEA76DB,
 				31EFDF42A4BDCEE215A15D80,
 				018F6DA9032F96B1F2808C4E,
@@ -86,6 +96,7 @@
 		4DD34D3B94FBB9E4804400E6 = {
 			isa = PBXGroup;
 			children = (
+				BEAF00123456789000000001,
 				AA059F03067DD3794AE1BDA1,
 				D5DD338AB78BEA7F65D856A7,
 				8D9399628BD0F49953E42C43,
@@ -199,6 +210,7 @@
 		C1D5B93EB31FC051FFE18044 = {
 			isa = PBXGroup;
 			children = (
+				CAACAE123456789000000001,
 				7EB77E5F18366E2105128BE9,
 				5FB215537C7965C6E62EBA9F,
 				1A5F723FF7E0648C74236E7F,
@@ -627,6 +639,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BEAF00123456789000000002,
+				ABCDEF123456789000000002,
+				ABCDEF123456789000000012,
 				EEC2F1AC13A2EF56FCB51B0B,
 				F3CF268FE3D0BDA7DCF51EC6,
 				23D02AA1BF13A231073520BE,
@@ -677,6 +692,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAACAE123456789000000002,
 				540A68F89932D110AE2E9F38,
 				B814A8AB5A6A930F6B4EEB1C,
 				63F3CA2447BF0286477D6FF2,
@@ -811,6 +827,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = VibeAmp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VibeAmp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_LSMinimumSystemVersion = 15.0;
@@ -842,6 +859,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = VibeAmp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = VibeAmp;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_LSMinimumSystemVersion = 15.0;

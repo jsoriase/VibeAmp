@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import VibeAmp
 
 final class WindowingTests: XCTestCase {
@@ -103,13 +104,44 @@ final class WindowingTests: XCTestCase {
         XCTAssertEqual(diffs[0].dx, 6, "the 6pt pull beats the 9pt one")
     }
 
-    /// Dragging a group past a screen edge pulls it back in.
-    func testGroupIsHeldInsideTheWorkArea() {
-        let work = CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let offLeft = WindowSnappingCoordinator.snapWithinDiff(rect(-40, 300), workArea: work)
-        XCTAssertEqual(offLeft.dx, 40)
-        let offTop = WindowSnappingCoordinator.snapWithinDiff(rect(300, 800), workArea: work)
-        XCTAssertEqual(offTop.dy, 900 - 200 - 800)
+    func testScreenEdgesAttractNearbyWindowsButAllowCrossing() {
+        let screen = rect(0, 0, 1440, 900)
+        let nearRight = WindowSnappingCoordinator.snapToScreenEdgesDiff(rect(1054, 300), workArea: screen)
+        XCTAssertEqual(nearRight.dx, 6)
+        for frame in [rect(1200, 300), rect(-100, 300), rect(300, 800), rect(300, -100)] {
+            let diff = WindowSnappingCoordinator.snapToScreenEdgesDiff(frame, workArea: screen)
+            XCTAssertEqual(diff.dx, 0)
+            XCTAssertEqual(diff.dy, 0)
+        }
+    }
+
+    func testCrossDisplayGroupDoesNotJumpIntoDestinationScreen() {
+        let group = rect(1200, 100, 1140, 644)
+        let rightScreen = rect(1440, 0, 1920, 1080)
+        let diff = WindowSnappingCoordinator.snapToScreenEdgesDiff(group, workArea: rightScreen)
+        XCTAssertEqual(diff.dx, 0)
+        XCTAssertEqual(diff.dy, 0)
+        let upperScreen = rect(-400, 900, 1920, 1080)
+        let verticalDiff = WindowSnappingCoordinator.snapToScreenEdgesDiff(rect(100, 700, 760, 644), workArea: upperScreen)
+        XCTAssertEqual(verticalDiff.dx, 0)
+        XCTAssertEqual(verticalDiff.dy, 0)
+        let leftScreen = rect(-1920, -200, 1920, 1080)
+        XCTAssertEqual(WindowSnappingCoordinator.snapToScreenEdgesDiff(rect(-1914, 100), workArea: leftScreen).dx, -6)
+    }
+
+    func testPlaylistsPlacementStaysBesidePlayerOnItsDisplay() {
+        let screen = rect(-1920, 0, 1920, 1080)
+        let player = rect(-500, 600, 380, 212)
+        let size = WindowRole.savedPlaylists.defaultSize
+        let origin = WindowLayout.adjacentOrigin(for: size, beside: player, in: screen)
+        let playlist = CGRect(origin: origin, size: size)
+        XCTAssertTrue(screen.contains(playlist))
+        XCTAssertEqual(playlist.maxX, player.minX, "Use the left side when the right side is full")
+        XCTAssertEqual(playlist.maxY, player.maxY)
+
+        let lowPlayer = rect(-400, 30, 380, 212)
+        let clamped = WindowLayout.adjacentOrigin(for: size, beside: lowPlayer, in: screen)
+        XCTAssertTrue(screen.contains(CGRect(origin: clamped, size: size)))
     }
 
     // MARK: - Grouping
@@ -198,5 +230,58 @@ final class WindowingTests: XCTestCase {
         )
         XCTAssertEqual(clamped.x, 1440 - 380)
         XCTAssertEqual(clamped.y, 900 - 200)
+    }
+}
+
+@MainActor
+final class SavedPlaylistsWindowTests: XCTestCase {
+    func testPlaylistsSnapTravelWithPlayerAndPersistVisibility() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = StateStore(fileURL: directory.appendingPathComponent("state.json"))
+        let manager = WindowManager()
+        manager.configure(stateStore: store, log: nil)
+        manager.createAll(hosts: [.player: NSView(), .savedPlaylists: NSView()])
+        defer {
+            manager.window(for: .player)?.orderOut(nil)
+            manager.close(.savedPlaylists)
+            store.flush()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let player = try XCTUnwrap(manager.window(for: .player))
+        let playlists = try XCTUnwrap(manager.window(for: .savedPlaylists))
+        XCTAssertFalse(manager.isVisible(.savedPlaylists))
+        manager.toggle(.savedPlaylists)
+        XCTAssertTrue(playlists.isVisible)
+        XCTAssertTrue(manager.isVisible(.savedPlaylists))
+
+        let screen = try XCTUnwrap(player.screen).visibleFrame
+        let origin = CGPoint(x: screen.minX + 50, y: screen.minY + 80)
+        player.setFrameOrigin(origin)
+        playlists.setFrameOrigin(CGPoint(x: player.frame.maxX + 100, y: origin.y))
+        let mouse = CGPoint(x: playlists.frame.midX, y: playlists.frame.maxY - 12)
+        manager.dragBegin(.savedPlaylists, mouse: mouse)
+        manager.dragUpdate(.savedPlaylists, mouse: CGPoint(x: mouse.x - 92, y: mouse.y))
+        manager.dragEnd(.savedPlaylists)
+        XCTAssertEqual(playlists.frame.minX, player.frame.maxX)
+        XCTAssertEqual(player.frame.origin, origin, "Dragging playlists must leave the player in place")
+
+        let dockedOrigin = playlists.frame.origin
+        let playerMouse = CGPoint(x: player.frame.midX, y: player.frame.maxY - 12)
+        manager.dragBegin(.player, mouse: playerMouse)
+        manager.dragUpdate(.player, mouse: CGPoint(x: playerMouse.x + 40, y: playerMouse.y + 30))
+        manager.dragEnd(.player)
+        XCTAssertEqual(playlists.frame.origin, CGPoint(x: dockedOrigin.x + 40, y: dockedOrigin.y + 30))
+        XCTAssertEqual(playlists.frame.minX, player.frame.maxX)
+
+        manager.toggleShade(.savedPlaylists)
+        XCTAssertEqual(playlists.frame.height, WindowLayout.shadeHeight)
+        manager.toggleShade(.savedPlaylists)
+        XCTAssertEqual(playlists.frame.height, WindowRole.savedPlaylists.defaultSize.height)
+        manager.toggle(.savedPlaylists)
+        XCTAssertFalse(playlists.isVisible)
+        let visible = store.get([String: Bool].self, key: "windowVisible", fallback: [:])
+        XCTAssertEqual(visible[WindowRole.savedPlaylists.rawValue], false)
+        let positions = store.get([String: WindowState.WindowPoint].self, key: "windowPositions", fallback: [:])
+        XCTAssertEqual(positions[WindowRole.savedPlaylists.rawValue]?.x, Double(playlists.frame.minX))
     }
 }

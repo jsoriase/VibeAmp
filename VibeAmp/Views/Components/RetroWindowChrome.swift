@@ -107,7 +107,7 @@ struct RetroWindowChrome<Content: View>: View {
 
 /// Repeating 1px rules that fill the slack either side of the title, giving the
 /// bar its striped retro texture and a clear "grab me" affordance.
-private struct TitleBarGrip: View {
+struct TitleBarGrip: View {
     let active: Bool
 
     var body: some View {
@@ -128,7 +128,7 @@ private struct TitleBarGrip: View {
     }
 }
 
-private struct HeaderButton: View {
+struct HeaderButton: View {
     enum Glyph { case minimize, shade, close }
 
     let glyph: Glyph

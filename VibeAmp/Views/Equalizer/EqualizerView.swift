@@ -28,16 +28,25 @@ struct EqualizerView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .disabled(!playback.isEQAvailable)
+                .opacity(playback.isEQAvailable ? 1 : 0.45)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
                 .background(Color.black.opacity(0.45))
                 .overlay(Rectangle().stroke(VibeTheme.borderDark, lineWidth: 1))
 
                 HStack(spacing: 6) {
-                    PresetPicker { preset in
-                        eq.apply(preset)
-                        appState.persistEphemeral()
-                        playback.refreshEQ()
+                    if !playback.isEQAvailable {
+                        Text("EQ unavailable")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(VibeTheme.accentOrange)
+                            .help("Equalization is unavailable for this segmented stream.")
+                    } else {
+                        PresetPicker { preset in
+                            eq.apply(preset)
+                            appState.persistEphemeral()
+                            playback.refreshEQ()
+                        }
                     }
                     Spacer(minLength: 0)
                     Button("FLAT") {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Persisted geometry + visibility for the six retro modules.
+/// Persisted geometry + visibility for the retro modules.
 struct WindowState: Codable, Equatable, Sendable {
     var positions: [String: WindowPoint]
     var visible: [String: Bool]

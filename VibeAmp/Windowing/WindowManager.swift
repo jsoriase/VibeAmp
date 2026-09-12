@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import Observation
 
-/// Owns the six independent retro modules. All windows observe the same
+/// Owns the independent retro modules. All windows observe the same
 /// native Swift state — no IPC. Handles creation, visibility, shade,
 /// snapping/docking, and layout persistence.
 @MainActor
@@ -39,9 +39,6 @@ final class WindowManager: NSObject {
         let sizes: [WindowRole: CGSize]
         /// Frames of the windows staying put, to snap against.
         let stationary: [CGRect]
-        /// The dragged window's own origin at drag start.
-        let anchor: CGPoint
-        let workArea: CGRect
     }
     private var drag: DragSession?
 
@@ -70,7 +67,7 @@ final class WindowManager: NSObject {
         keyRole == role
     }
 
-    /// Creates all six windows. `hosts` maps each role to its SwiftUI content.
+    /// Creates all module windows. `hosts` maps each role to its SwiftUI content.
     func createAll(hosts: [WindowRole: NSView]) {
         guard windows.isEmpty else { return }
 
@@ -114,7 +111,7 @@ final class WindowManager: NSObject {
             let shouldShow: Bool = {
                 if role == .player { return true }
                 if let saved = restoredVisible[role.rawValue] { return saved }
-                return true
+                return role != .savedPlaylists
             }()
             visible[role] = shouldShow
             if shouldShow {
@@ -127,6 +124,11 @@ final class WindowManager: NSObject {
             } else {
                 shaded[role] = false
             }
+        }
+        if restoredPositions[WindowRole.savedPlaylists.rawValue] == nil {
+            positionPlaylistsNearPlayer(force: true)
+        } else if isVisible(.savedPlaylists) {
+            positionPlaylistsNearPlayer()
         }
         saveLayout()
     }
@@ -160,7 +162,7 @@ final class WindowManager: NSObject {
             win.orderOut(nil)
             visible[role] = false
         } else {
-            ensureOnScreen(role)
+            prepareToShow(role)
             win.makeKeyAndOrderFront(nil)
             visible[role] = true
         }
@@ -169,7 +171,7 @@ final class WindowManager: NSObject {
 
     func show(_ role: WindowRole) {
         guard let win = windows[role] else { return }
-        ensureOnScreen(role)
+        prepareToShow(role)
         win.makeKeyAndOrderFront(nil)
         visible[role] = true
         saveLayout()
@@ -177,7 +179,7 @@ final class WindowManager: NSObject {
 
     func showAll() {
         for role in WindowRole.allCases {
-            ensureOnScreen(role)
+            prepareToShow(role)
             windows[role]?.orderFrontRegardless()
             visible[role] = true
         }
@@ -320,7 +322,7 @@ final class WindowManager: NSObject {
     /// playlist and it moves alone, however it is docked.
     func dragBegin(_ role: WindowRole, mouse: CGPoint) {
         var frames = visibleFrames()
-        guard let own = frames[role.rawValue] else { return }
+        guard frames[role.rawValue] != nil else { return }
 
         let groupKeys: Set<String> = role == .player
             ? WindowSnappingCoordinator.connectedGroup(startingAt: role.rawValue, among: frames)
@@ -346,11 +348,7 @@ final class WindowManager: NSObject {
             mouseStart: mouse,
             startOrigins: startOrigins,
             sizes: sizes,
-            stationary: stationary,
-            anchor: own.origin,
-            workArea: windows[role]?.screen?.visibleFrame
-                ?? NSScreen.main?.visibleFrame
-                ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
+            stationary: stationary
         )
     }
 
@@ -367,12 +365,15 @@ final class WindowManager: NSObject {
         }
 
         // The group snaps as a unit — any member reaching a stationary window
-        // pulls the whole set into place — and its bounding box stays on screen.
+        // pulls the whole set into place. Screen edges attract only nearby
+        // frames; they must never clamp a drag to its starting monitor.
         let snapDiff = WindowSnappingCoordinator.snapDiffManyToMany(proposedFrames, session.stationary)
-        let withinDiff = WindowSnappingCoordinator.snapWithinDiff(
-            WindowSnappingCoordinator.boundingBox(proposedFrames),
-            workArea: session.workArea
-        )
+        let workArea = NSScreen.screens.first { $0.frame.contains(mouse) }?.visibleFrame
+        let withinDiff = workArea.map {
+            WindowSnappingCoordinator.snapToScreenEdgesDiff(
+                WindowSnappingCoordinator.boundingBox(proposedFrames), workArea: $0
+            )
+        } ?? .zero
         let final = WindowSnappingCoordinator.applyMultipleDiffs(proposed, [snapDiff, withinDiff])
 
         var moves: [(WindowRole, NSPoint)] = []
@@ -416,6 +417,19 @@ final class WindowManager: NSObject {
     func persistNow() {
         saveLayout()
         stateStore?.flush()
+    }
+
+    private func prepareToShow(_ role: WindowRole) {
+        if role == .savedPlaylists { positionPlaylistsNearPlayer() }
+        ensureOnScreen(role)
+    }
+
+    private func positionPlaylistsNearPlayer(force: Bool = false) {
+        guard let player = windows[.player], let screen = player.screen?.visibleFrame,
+              let playlists = windows[.savedPlaylists] else { return }
+        guard force || !screen.contains(playlists.frame) else { return }
+        let origin = WindowLayout.adjacentOrigin(for: playlists.frame.size, beside: player.frame, in: screen)
+        setOrigin(origin, for: .savedPlaylists, on: playlists)
     }
 
     private func ensureOnScreen(_ role: WindowRole) {

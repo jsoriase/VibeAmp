@@ -255,3 +255,98 @@ final class ModelParsingTests: XCTestCase {
         XCTAssertGreaterThan(abs(boostedOut), abs(flatOut))
     }
 }
+
+final class SegmentedAudioTests: XCTestCase {
+    private func word(_ value: UInt64, _ size: Int = 4) -> Data {
+        Data((0..<size).reversed().map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) })
+    }
+    private func box(_ type: String, _ body: Data) -> Data {
+        word(UInt64(body.count + 8)) + Data(type.utf8) + body
+    }
+    private func fixture(version: UInt64 = 0, offset: UInt64 = 7, reference: UInt64 = 100, timescale: UInt64 = 1000) -> Data {
+        let width = version == 0 ? 4 : 8
+        let fields = word(version << 24) + word(1) + word(timescale)
+        let timing = word(0, width) + word(offset, width) + word(1)
+        let entry = word(reference) + word(10000) + word(0)
+        return box("ftyp", Data()) + box("moov", Data()) + box("sidx", fields + timing + entry)
+    }
+    func testIndexUsesOffsetsRelativeToEndOfSidx() throws {
+        for version: UInt64 in [0, 1] {
+            let bytes = fixture(version: version)
+            let index = try XCTUnwrap(AudioSegmentIndex.parse(bytes))
+            XCTAssertEqual(index.initializationSize, 16)
+            XCTAssertEqual(index.segments, [.init(offset: UInt64(bytes.count + 7), size: 100, duration: 10)])
+            let playlist = index.playlist(mediaURL: URL(string: "https://cdn.example/audio?sig=abc&x=1")!)
+            XCTAssertTrue(playlist.contains("#EXT-X-TARGETDURATION:10"))
+            XCTAssertTrue(playlist.contains("#EXT-X-BYTERANGE:100@\(bytes.count + 7)"))
+            XCTAssertTrue(playlist.contains("#EXTINF:10.000000,"))
+            XCTAssertTrue(playlist.hasSuffix("#EXT-X-ENDLIST\n"))
+        }
+    }
+    func testMalformedOrUnsupportedIndexesAreRejected() {
+        let bytes = fixture()
+        for end in 0..<bytes.count { XCTAssertNil(AudioSegmentIndex.parse(Data(bytes.prefix(end)))) }
+        XCTAssertNil(AudioSegmentIndex.parse(fixture(reference: 0x80000001)))
+        XCTAssertNil(AudioSegmentIndex.parse(fixture(reference: 0)))
+        XCTAssertNil(AudioSegmentIndex.parse(fixture(timescale: 0)))
+        XCTAssertNil(AudioSegmentIndex.parse(fixture(version: 2)))
+        XCTAssertNil(AudioSegmentIndex.parse(fixture(version: 1, offset: UInt64.max)))
+        XCTAssertNil(AudioSegmentIndex.parse(box("ftyp", Data()) + box("mdat", Data()) + bytes))
+    }
+    func testPlaylistEndpointServesOnlyItsOwnPath() async throws {
+        let server = try await SegmentedAudio.serve(playlist: "#EXTM3U\n#EXT-X-ENDLIST\n")
+        let (body, response) = try await URLSession.shared.data(from: server.url)
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(String(data: body, encoding: .utf8), "#EXTM3U\n#EXT-X-ENDLIST\n")
+        var head = URLRequest(url: server.url)
+        head.httpMethod = "HEAD"
+        let (empty, headResponse) = try await URLSession.shared.data(for: head)
+        XCTAssertTrue(empty.isEmpty)
+        XCTAssertEqual((headResponse as? HTTPURLResponse)?.statusCode, 200)
+        let (_, missing) = try await URLSession.shared.data(from: server.url.deletingLastPathComponent().appendingPathComponent("other"))
+        XCTAssertEqual((missing as? HTTPURLResponse)?.statusCode, 404)
+        withExtendedLifetime(server) {}
+    }
+}
+
+@MainActor
+final class PlaybackLoadingTests: XCTestCase {
+    private func controller(delay: Duration = .seconds(5)) -> PlaybackController {
+        let controller = PlaybackController()
+        controller.queue = QueueStore()
+        controller.eq = EQStore()
+        controller.log = AppLog()
+        controller.youtube = YouTubeService(resolver: { _ in
+            try await Task.sleep(for: delay)
+            return YTDLPModels.StreamInfo(streamURL: "https://example.com/audio.m4a", bitrateKbps: 128, sampleRateKHz: 44, codec: "aac", ext: "m4a")
+        })
+        return controller
+    }
+    func testStopAndPauseCancelPendingAutoplay() async throws {
+        for pause in [false, true] {
+            let player = controller(delay: .milliseconds(100))
+            player.load(Track(id: "pending", title: "Pending", webpageURL: "https://youtu.be/pending"))
+            XCTAssertEqual(player.status, .loading)
+            XCTAssertFalse(player.isPlaying)
+            if pause { player.pause() } else { player.stop() }
+            try await Task.sleep(for: .milliseconds(250))
+            XCTAssertEqual(player.status, pause ? .paused : .stopped)
+            XCTAssertFalse(player.isPlaying)
+            XCTAssertFalse(player.isBuffering)
+        }
+    }
+    func testWatchdogRetriesOnceThenLeavesBuffering() async throws {
+        let player = controller()
+        player.playbackTimeout = 0.01
+        player.load(Track(id: "timeout", title: "Timeout", webpageURL: "https://youtu.be/timeout"))
+        let deadline = Date().addingTimeInterval(4)
+        while Date() < deadline {
+            if case .failed = player.status { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        guard case .failed = player.status else { XCTFail("Expected terminal timeout"); player.stop(); return }
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertFalse(player.isBuffering)
+        XCTAssertEqual(player.log.entries.filter { $0.message.contains("retrying once") }.count, 1)
+    }
+}

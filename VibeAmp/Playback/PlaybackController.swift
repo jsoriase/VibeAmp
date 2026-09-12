@@ -30,6 +30,7 @@ final class PlaybackController {
     var sampleRateKHz: Int = 0
     var statusMessage: String = "Ready to stream..."
     var isPlaying: Bool = false
+    var isEQAvailable = true
 
     // MARK: - Collaborators (injected)
 
@@ -46,13 +47,20 @@ final class PlaybackController {
     private var playerItem: AVPlayerItem?
     private var timeObserver: Any?
     private var statusObserver: NSKeyValueObservation?
-    private var bufferingObserver: NSKeyValueObservation?
+    private var playbackObserver: NSKeyValueObservation?
+    private var loadTask: Task<Void, Never>?
+    private var watchdog: Task<Void, Never>?
+    private var segmentedAudio: SegmentedAudio?
+    private var wantsPlayback = false
+    private var waitStarted: Date?
+    private var lastProgressTime: Double = 0
+    var playbackTimeout: TimeInterval = 45
     private var durationObserver: NSKeyValueObservation?
     private var endObserver: NSObjectProtocol?
     private var failObserver: NSObjectProtocol?
     private var tapContext: EQTapContext?
     private var currentAudioTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
-    private var prefetchTask: Task<Void, Never>?
+    private var prefetchTargetKey: String?
     private var loadGeneration = 0
     private var didRetryCurrent = false
     private var lastPersistedVolume: Double = -1
@@ -90,45 +98,50 @@ final class PlaybackController {
     // MARK: - Transport
 
     func toggle() {
-        if isPlaying { pause() } else { play() }
+        if wantsPlayback { pause() } else { play() }
     }
 
     func play() {
         ensurePlayer()
         guard let player else { return }
-        if player.currentItem == nil {
-            // Nothing loaded: try to load the queue's current track.
-            if let track = queue.currentTrack {
-                load(track)
-            } else {
-                statusMessage = "Queue is empty — search for something"
-            }
+        if status == .loading && wantsPlayback { return }
+        if player.currentItem == nil || player.currentItem?.status == .failed {
+            if let track = currentTrack ?? queue.currentTrack { load(track) }
+            else { statusMessage = "Queue is empty — search for something" }
             return
         }
+        wantsPlayback = true
+        startWatchdog(generation: loadGeneration)
         player.play()
-        isPlaying = true
-        if case .failed = status {
-            status = .playing
-        } else if status == .idle || status == .stopped {
-            status = .playing
-        }
-        statusMessage = "Playing"
-        nowPlaying?.update()
+        syncPlaybackState()
     }
 
     func pause() {
+        wantsPlayback = false
+        // A resolve has no item to pause. Invalidate it so it cannot autoplay later.
+        if playerItem == nil { loadGeneration += 1; loadTask?.cancel() }
+        watchdog?.cancel()
         player?.pause()
         isPlaying = false
-        if status == .playing { status = .paused }
+        isBuffering = false
+        status = .paused
         statusMessage = "Paused"
         nowPlaying?.update()
     }
 
     func stop() {
+        loadGeneration += 1
+        loadTask?.cancel()
+        watchdog?.cancel()
+        wantsPlayback = false
+        teardownItemObservers()
         player?.pause()
-        player?.seek(to: .zero)
+        player?.replaceCurrentItem(with: nil)
+        playerItem = nil
+        segmentedAudio = nil
         currentTime = 0
         isPlaying = false
+        isBuffering = false
         status = .stopped
         statusMessage = "Stopped"
         nowPlaying?.update()
@@ -181,84 +194,161 @@ final class PlaybackController {
     /// Loads a track: resolves a fresh AVFoundation-friendly stream URL and plays.
     /// Stream URLs expire, so they are never persisted — only the YouTube identity is.
     func load(_ track: Track) {
-        loadGeneration += 1
-        let generation = loadGeneration
         didRetryCurrent = false
-        prefetchTask?.cancel()
-        prefetchTask = nil
+        prefetchTargetKey = nil
         currentTrack = track
         currentTime = 0
         duration = track.durationSeconds ?? 0
         bitrateKbps = 0
         sampleRateKHz = 0
-        status = .loading
-        isBuffering = true
-        statusMessage = "Resolving stream…"
-        log?.info("Loading: \(track.title)")
-        nowPlaying?.update()
+        beginLoad(track, fresh: false)
+    }
 
-        Task { @MainActor [weak self] in
+    private func beginLoad(_ track: Track, fresh: Bool) {
+        loadGeneration += 1
+        let generation = loadGeneration
+        loadTask?.cancel()
+        teardownItemObservers()
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        playerItem = nil
+        segmentedAudio = nil
+        tapContext = nil
+        currentAudioTrackID = kCMPersistentTrackID_Invalid
+        wantsPlayback = true
+        isPlaying = false
+        isBuffering = true
+        isEQAvailable = true
+        status = .loading
+        statusMessage = fresh ? "Refreshing stream…" : "Resolving stream…"
+        log?.info("Loading: \(track.title)")
+        startWatchdog(generation: generation)
+        nowPlaying?.update()
+        loadTask = Task { @MainActor [weak self] in
             guard let self else { return }
             do {
-                let wasCached = await self.youtube.cachedStream(for: track.webpageURL) != nil
-                let stream = try await self.youtube.stream(urlString: track.webpageURL)
-                // Stale load guard: ignore if the user moved on.
+                let stream = try await fresh
+                    ? self.youtube.resolveFreshStream(urlString: track.webpageURL)
+                    : self.youtube.stream(urlString: track.webpageURL)
+                try Task.checkCancellation()
                 guard generation == self.loadGeneration else { return }
                 self.bitrateKbps = stream.bitrateKbps
                 self.sampleRateKHz = stream.sampleRateKHz
-                if wasCached {
-                    self.log?.info("Stream cache hit (\(stream.ext.isEmpty ? "audio" : stream.ext))")
-                } else {
-                    self.log?.info("Stream resolved (\(stream.ext.isEmpty ? "audio" : stream.ext), \(stream.bitrateKbps) kbps)")
-                }
-                self.statusMessage = "Loading audio…"
-                await self.playStream(urlString: stream.streamURL, track: track, generation: generation)
+                try await self.playStream(stream, track: track, generation: generation)
             } catch {
-                guard generation == self.loadGeneration else { return }
-                // One fresh retry for transient/expired-URL failures is handled
-                // at the AVPlayer level; here a resolve failure is terminal.
-                self.status = .failed(error.localizedDescription)
-                self.statusMessage = "Playback error: \(error.localizedDescription)"
-                self.isBuffering = false
-                self.log?.error("Error fetching stream URL: \(error.localizedDescription)")
-                self.nowPlaying?.update()
+                guard generation == self.loadGeneration, !Task.isCancelled else { return }
+                self.finishFailure(error)
             }
         }
     }
 
-    private func playStream(urlString: String, track: Track, generation: Int) async {
-        guard generation == loadGeneration else { return }
-        guard let url = URL(string: urlString) else {
-            status = .failed("Invalid stream URL")
-            statusMessage = "Playback error: invalid stream URL"
-            isBuffering = false
-            return
+    private func playStream(_ stream: YTDLPModels.StreamInfo, track: Track, generation: Int) async throws {
+        guard let url = URL(string: stream.streamURL), ["https", "http"].contains(url.scheme) else {
+            throw URLError(.badURL)
         }
-        teardownItemObservers()
-        currentAudioTrackID = kCMPersistentTrackID_Invalid
-
-        let asset = AVURLAsset(url: url)
+        var playbackURL = url
+        var adapter: SegmentedAudio?
+        // Long fragmented MP4 files can make AVPlayer scan thousands of fragments
+        // before starting. Songs retain the file playback path and its EQ tap.
+        if (track.durationSeconds ?? 0) >= 15 * 60, stream.ext == "m4a",
+           !url.path.contains("m3u8") {
+            statusMessage = "Preparing audio segments…"
+            do {
+                adapter = try await SegmentedAudio.prepare(mediaURL: url)
+                if let adapter { playbackURL = adapter.url }
+                else { log?.warning("No supported segment index; using direct audio with a playback timeout") }
+            } catch {
+                try Task.checkCancellation()
+                log?.warning("Could not prepare segments: \(error.localizedDescription); using direct audio")
+            }
+        }
+        try Task.checkCancellation()
+        guard generation == loadGeneration else { return }
+        segmentedAudio = adapter
+        isEQAvailable = adapter == nil && !url.path.contains("m3u8")
+        let asset = AVURLAsset(url: playbackURL)
         let item = AVPlayerItem(asset: asset)
-
+        item.preferredForwardBufferDuration = 10
         playerItem = item
-        observe(item: item, track: track)
         ensurePlayer()
+        observe(item: item, track: track)
         player?.replaceCurrentItem(with: item)
         player?.volume = Float(volume)
+        statusMessage = "Loading audio…"
         player?.play()
-        isPlaying = true
-        status = .playing
-        statusMessage = "Playing"
-        log?.info("Playback started: \(track.title)")
-        nowPlaying?.update()
-        prefetchNext()
-
-        // EQ tap attaches as soon as the audio track ID is known, without
-        // blocking first sound: resolving tracks needs its own round trip to
-        // the CDN, so awaiting it here would delay playback audibly.
-        Task { @MainActor [weak self] in
-            await self?.attachEQ(to: item, asset: asset, generation: generation)
+        syncPlaybackState()
+        if adapter != nil { log?.info("Segmented playback ready — audio is fetched directly from the CDN") }
+        if isEQAvailable {
+            Task { @MainActor [weak self] in
+                await self?.attachEQ(to: item, asset: asset, generation: generation)
+            }
+        } else {
+            log?.warning("EQ unavailable for segmented audio on this macOS playback engine")
         }
+    }
+
+    private func syncPlaybackState() {
+        guard wantsPlayback, let player, let item = playerItem,
+              player.currentItem === item else { return }
+        let playing = player.timeControlStatus == .playing
+        let changed = isPlaying != playing
+        isPlaying = playing
+        isBuffering = !playing
+        status = playing ? .playing : .loading
+        statusMessage = playing ? "Playing" : "Buffering audio…"
+        if playing {
+            waitStarted = nil
+            if changed {
+                log?.info("Playback started: \(currentTrack?.title ?? "audio")")
+                refreshPrefetch()
+            }
+        }
+        nowPlaying?.update()
+    }
+
+    /// Covers URL resolution, startup, and later stalls. Progress resets the
+    /// deadline; pausing/stopping cancels it. Stale loads cannot trigger a retry.
+    private func startWatchdog(generation: Int) {
+        watchdog?.cancel()
+        waitStarted = Date()
+        lastProgressTime = player?.currentTime().seconds ?? 0
+        watchdog = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self, self.loadGeneration == generation, self.wantsPlayback else { return }
+                let time = self.player?.currentTime().seconds ?? 0
+                if time.isFinite, time != self.lastProgressTime, self.player?.timeControlStatus == .playing {
+                    self.waitStarted = nil
+                } else if self.waitStarted == nil {
+                    self.waitStarted = Date()
+                }
+                self.lastProgressTime = time
+                if let started = self.waitStarted, Date().timeIntervalSince(started) >= self.playbackTimeout {
+                    let error = NSError(domain: "VibeAmp", code: 1, userInfo: [NSLocalizedDescriptionKey:
+                        "Audio did not respond within \(Int(self.playbackTimeout)) seconds"])
+                    if let track = self.currentTrack { self.handleItemFailed(track: track, error: error) }
+                    return
+                }
+            }
+        }
+    }
+
+    private func finishFailure(_ error: Error) {
+        loadGeneration += 1
+        loadTask?.cancel()
+        watchdog?.cancel()
+        wantsPlayback = false
+        teardownItemObservers()
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        playerItem = nil
+        segmentedAudio = nil
+        isPlaying = false
+        isBuffering = false
+        status = .failed(error.localizedDescription)
+        statusMessage = "Playback error: \(error.localizedDescription)"
+        log?.error(statusMessage)
+        nowPlaying?.update()
     }
 
     /// Resolves the audio track ID and attaches the genuine EQ tap.
@@ -292,19 +382,26 @@ final class PlaybackController {
         }
     }
 
-    /// Resolves the next track's stream while the current one plays, so
-    /// Next and auto-advance start instantly. Best-effort and keyed by URL,
-    /// so a superseded prefetch can never corrupt playback. Only one runs
-    /// at a time; a track change cancels the stale one (which also frees
-    /// the service actor for the newly demanded resolve).
-    private func prefetchNext() {
-        prefetchTask?.cancel()
+    /// Re-evaluate after starting playback or editing the queue. A resolution
+    /// already in progress remains service-owned, ready for a subsequent Next.
+    func refreshPrefetch() {
+        guard let queue, let youtube, status == .playing || status == .paused,
+              let currentTrack, let queuedTrack = queue.currentTrack,
+              YouTubeService.streamKey(for: currentTrack.webpageURL) == YouTubeService.streamKey(for: queuedTrack.webpageURL)
+        else { return }
         guard let next = queue.peek(1) else {
-            prefetchTask = nil
+            if prefetchTargetKey != "<none>" {
+                prefetchTargetKey = "<none>"
+                log?.info("[PREFETCH] Skipped: no next track in queue")
+            }
             return
         }
-        prefetchTask = Task { [weak self] in
-            await self?.youtube.prefetch(urlString: next.webpageURL)
+        let key = YouTubeService.streamKey(for: next.webpageURL)
+        guard prefetchTargetKey != key else { return }
+        prefetchTargetKey = key
+        log?.info("[PREFETCH] Next track: \(next.title)")
+        Task {
+            await youtube.prefetch(urlString: next.webpageURL)
         }
     }
 
@@ -336,27 +433,26 @@ final class PlaybackController {
     private func observe(item: AVPlayerItem, track: Track) {
         statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, self.playerItem === item else { return }
                 if item.status == .failed {
                     self.handleItemFailed(track: track, error: item.error)
                 }
             }
         }
-        bufferingObserver = item.observe(\.isPlaybackBufferEmpty, options: [.new]) { [weak self] item, _ in
+        playbackObserver = player?.observe(\.timeControlStatus, options: [.new]) { [weak self, weak item] _, _ in
             Task { @MainActor in
-                self?.isBuffering = item.isPlaybackBufferEmpty
-                if item.isPlaybackBufferEmpty {
-                    self?.log?.info("Buffering…")
-                }
+                guard let self, let item, self.playerItem === item else { return }
+                self.syncPlaybackState()
             }
         }
         // Keep duration fresh for the seek bar + menu bar.
         durationObserver = item.observe(\.duration, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
+                guard let self, self.playerItem === item else { return }
                 let seconds = item.duration.seconds
                 if seconds.isFinite, seconds > 0 {
-                    self?.duration = seconds
-                    self?.nowPlaying?.update()
+                    self.duration = seconds
+                    self.nowPlaying?.update()
                 }
             }
         }
@@ -365,7 +461,10 @@ final class PlaybackController {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.handleEnded() }
+            Task { @MainActor in
+                guard let self, self.playerItem === item else { return }
+                self.handleEnded()
+            }
         }
         failObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemFailedToPlayToEndTime,
@@ -373,9 +472,10 @@ final class PlaybackController {
             queue: .main
         ) { [weak self] note in
             Task { @MainActor in
+                guard let self, self.playerItem === item else { return }
                 let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
-                if let track = self?.currentTrack {
-                    self?.handleItemFailed(track: track, error: error)
+                if let track = self.currentTrack {
+                    self.handleItemFailed(track: track, error: error)
                 }
             }
         }
@@ -383,10 +483,10 @@ final class PlaybackController {
 
     private func teardownItemObservers() {
         statusObserver?.invalidate()
-        bufferingObserver?.invalidate()
+        playbackObserver?.invalidate()
         durationObserver?.invalidate()
         statusObserver = nil
-        bufferingObserver = nil
+        playbackObserver = nil
         durationObserver = nil
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         if let failObserver { NotificationCenter.default.removeObserver(failObserver) }
@@ -400,7 +500,7 @@ final class PlaybackController {
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, let activeItem = self.player?.currentItem, activeItem === self.playerItem else { return }
                 let seconds = time.seconds
                 if seconds.isFinite, seconds >= 0 {
                     self.currentTime = seconds
@@ -408,7 +508,6 @@ final class PlaybackController {
                 if let item = self.player?.currentItem {
                     let dur = item.duration.seconds
                     if dur.isFinite, dur > 0 { self.duration = dur }
-                    self.isBuffering = item.isPlaybackBufferEmpty && self.isPlaying
                 }
                 // Throttle Now Playing elapsed updates to whole seconds.
                 self.nowPlaying?.updateIfSecondChanged(elapsed: self.currentTime, duration: self.duration)
@@ -421,7 +520,10 @@ final class PlaybackController {
         if let track = queue.step(1) {
             load(track)
         } else {
+            wantsPlayback = false
+            watchdog?.cancel()
             isPlaying = false
+            isBuffering = false
             status = .stopped
             statusMessage = "Stopped"
             nowPlaying?.update()
@@ -429,43 +531,13 @@ final class PlaybackController {
     }
 
     private func handleItemFailed(track: Track, error: Error?) {
-        // One fresh stream resolution before giving up (covers expired CDN URLs).
+        guard wantsPlayback else { return }
         if !didRetryCurrent {
             didRetryCurrent = true
-            log?.warning("Playback failed (\(error?.localizedDescription ?? "unknown")) — retrying with a fresh stream URL")
-            loadGeneration += 1
-            let generation = loadGeneration
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                do {
-                    // Bypass the cache: the cached URL is exactly what failed.
-                    let stream = try await self.youtube.resolveFreshStream(urlString: track.webpageURL)
-                    guard generation == self.loadGeneration else { return }
-                    self.bitrateKbps = stream.bitrateKbps
-                    self.sampleRateKHz = stream.sampleRateKHz
-                    await self.playStream(urlString: stream.streamURL, track: track, generation: generation)
-                } catch {
-                    guard generation == self.loadGeneration else { return }
-                    self.status = .failed(error.localizedDescription)
-                    self.statusMessage = "Playback error: \(error.localizedDescription)"
-                    self.isPlaying = false
-                    self.isBuffering = false
-                    self.log?.error("Playback failed: \(error.localizedDescription)")
-                    self.nowPlaying?.update()
-                }
-            }
-            return
+            log?.warning("Playback stalled or failed — retrying once with a fresh stream URL")
+            beginLoad(track, fresh: true)
+        } else {
+            finishFailure(error ?? URLError(.cannotDecodeContentData))
         }
-        status = .failed(error?.localizedDescription ?? "Playback failed")
-        statusMessage = "Playback error: \(error?.localizedDescription ?? "unknown error")"
-        isPlaying = false
-        isBuffering = false
-        log?.error("Playback failed: \(error?.localizedDescription ?? "unknown error")")
-        nowPlaying?.update()
-    }
-
-    deinit {
-        // Note: @MainActor teardown; observers removed on next load or dealloc.
-        // timeObserver removal requires the player; kept alive with controller.
     }
 }

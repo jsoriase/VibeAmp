@@ -7,7 +7,7 @@ struct VibeAmpApp: App {
 
     var body: some Scene {
         // Genuine macOS menu-bar mini player: modern system surface,
-        // window-style popover. Retro skin stays in the six modules.
+        // window-style popover. Retro skin stays in the retro modules.
         MenuBarExtra("VibeAmp", systemImage: "music.note") {
             MenuBarPopoverView()
                 .environment(delegate.appState)
@@ -39,8 +39,10 @@ struct VibeAmpApp: App {
                     .keyboardShortcut("l", modifiers: [.command])
                 Button("Toggle Equalizer") { delegate.appState.windows.toggle(.equalizer) }
                     .keyboardShortcut("e", modifiers: [.command])
-                Button("Toggle Playlist") { delegate.appState.windows.toggle(.playlist) }
+                Button("Toggle Queue") { delegate.appState.windows.toggle(.playlist) }
                     .keyboardShortcut("p", modifiers: [.command])
+                Button("Toggle Playlists") { delegate.appState.windows.toggle(.savedPlaylists) }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
                 Button("Toggle Artwork") { delegate.appState.windows.toggle(.art) }
                     .keyboardShortcut("a", modifiers: [.command, .option])
                 Divider()
@@ -102,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .player: hosted(PlayerView()),
             .equalizer: hosted(EqualizerView()),
             .playlist: hosted(PlaylistView()),
+            .savedPlaylists: hosted(SavedPlaylistsView(appState: appState)),
             .search: hosted(SearchView()),
             .art: hosted(ArtworkView()),
             .log: hosted(LogView()),
