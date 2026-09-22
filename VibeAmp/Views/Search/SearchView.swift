@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SearchView: View {
     @Environment(AppState.self) private var appState
-    @Environment(QueueStore.self) private var queue
 
     @State private var query: String = ""
     @State private var status: String = ""
@@ -118,6 +117,17 @@ struct SearchView: View {
                                 .buttonStyle(.plain)
                                 .help("Play \(item.title)")
                                 .accessibilityLabel("Play \(item.title)")
+                                .contextMenu {
+                                    Button("Añadir al inicio") {
+                                        enqueueResult(item, at: .beginning)
+                                    }
+                                    Button("Añadir siguiente") {
+                                        enqueueResult(item, at: .next)
+                                    }
+                                    Button("Añadir final") {
+                                        enqueueResult(item, at: .end)
+                                    }
+                                }
                             }
                         }
                     }
@@ -223,7 +233,26 @@ struct SearchView: View {
     }
 
     private func selectResult(_ item: YTDLPModels.SearchResult) {
-        let track = Track(
+        appState.addAndPlay(track(for: item))
+        status = "Playing: \(item.title)"
+        query = ""
+        results = []
+    }
+
+    private func enqueueResult(_ item: YTDLPModels.SearchResult, at position: QueueStore.InsertionPosition) {
+        appState.enqueue(track(for: item), at: position)
+        switch position {
+        case .beginning:
+            status = "Añadido al inicio: \(item.title)"
+        case .next:
+            status = "Añadido como siguiente: \(item.title)"
+        case .end:
+            status = "Añadido al final: \(item.title)"
+        }
+    }
+
+    private func track(for item: YTDLPModels.SearchResult) -> Track {
+        Track(
             id: item.id,
             title: item.title,
             uploader: item.uploader,
@@ -232,9 +261,5 @@ struct SearchView: View {
             webpageURL: item.webpageURL,
             thumbnailURL: item.thumbnailURL
         )
-        appState.addAndPlay(track)
-        status = "Playing: \(item.title)"
-        query = ""
-        results = []
     }
 }

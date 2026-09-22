@@ -42,6 +42,17 @@ final class WindowManager: NSObject {
     }
     private var drag: DragSession?
 
+    /// Bottom-right resize uses screen coordinates so the moving window edge
+    /// cannot feed back into SwiftUI's local gesture coordinates.
+    private struct ResizeSession {
+        let role: WindowRole
+        let mouseStart: CGPoint
+        let startFrame: CGRect
+        let startOrigins: [WindowRole: CGPoint]
+        let graph: WindowSnappingCoordinator.EdgeGraph
+    }
+    private var resize: ResizeSession?
+
     var onPlayerClose: (() -> Void)?
 
     // MARK: - Setup
@@ -77,10 +88,12 @@ final class WindowManager: NSObject {
         // Restored positions (AppKit bottom-left origins, validated on-screen).
         // Migrates Electron "bounds"/"visible" on first native launch.
         var restoredPositions: [String: WindowState.WindowPoint] = [:]
+        var restoredSizes: [String: WindowState.WindowSize] = [:]
         var restoredVisible: [String: Bool] = [:]
         var restoredShaded: [String: Bool] = [:]
         if let store = stateStore {
             restoredPositions = store.get([String: WindowState.WindowPoint].self, key: "windowPositions", fallback: [:])
+            restoredSizes = store.get([String: WindowState.WindowSize].self, key: "windowSizes", fallback: [:])
             restoredVisible = store.get([String: Bool].self, key: "windowVisible", fallback: [:])
             restoredShaded = store.get([String: Bool].self, key: "windowShaded", fallback: [:])
             if restoredPositions.isEmpty {
@@ -95,8 +108,18 @@ final class WindowManager: NSObject {
 
         for role in WindowRole.allCases {
             guard let host = hosts[role] else { continue }
-            let size = role.defaultSize
+            var size = role.defaultSize
+            if role.isResizable, let saved = restoredSizes[role.rawValue],
+               saved.width.isFinite, saved.height.isFinite {
+                size = CGSize(
+                    width: max(role.minimumSize.width, saved.width),
+                    height: max(role.minimumSize.height, saved.height)
+                )
+            }
             var frame = fallback[role] ?? NSRect(x: primary.minX + 20, y: primary.minY + 20, width: size.width, height: size.height)
+            // Keep the default top-left anchor when only a saved size exists.
+            frame.origin.y = frame.maxY - size.height
+            frame.size = size
             if let saved = restoredPositions[role.rawValue] {
                 let candidate = NSRect(x: saved.x, y: saved.y, width: size.width, height: size.height)
                 if Self.frameIntersectsAnyScreen(candidate) {
@@ -107,6 +130,7 @@ final class WindowManager: NSObject {
             win.delegate = self
             windows[role] = win
             lastFrames[role] = frame
+            expandedSizes[role] = frame.size
 
             let shouldShow: Bool = {
                 if role == .player { return true }
@@ -392,22 +416,87 @@ final class WindowManager: NSObject {
         saveLayout()
     }
 
+    // MARK: - Resizing
+
+    func resizeBegin(_ role: WindowRole, mouse: CGPoint) {
+        guard role.isResizable, !isShaded(role), let win = windows[role] else { return }
+        let frames = visibleFrames()
+        resize = ResizeSession(
+            role: role,
+            mouseStart: mouse,
+            startFrame: win.frame,
+            startOrigins: windows.mapValues(\.frame.origin),
+            graph: WindowSnappingCoordinator.edgeGraph(frames)
+        )
+    }
+
+    func resizeUpdate(_ role: WindowRole, mouse: CGPoint) {
+        guard let session = resize, session.role == role,
+              role.isResizable, let win = windows[role] else { return }
+
+        let dx = mouse.x - session.mouseStart.x
+        let dy = mouse.y - session.mouseStart.y
+        let width = max(role.minimumSize.width, session.startFrame.width + dx).rounded()
+        let height = max(role.minimumSize.height, session.startFrame.height - dy).rounded()
+        let frame = NSRect(
+            x: session.startFrame.minX,
+            y: session.startFrame.maxY - height,
+            width: width,
+            height: height
+        )
+        setFrame(frame, for: role, on: win)
+        expandedSizes[role] = frame.size
+
+        // Preserve an existing vertical dock: modules resting underneath ride
+        // with the resized bottom edge, just as they already do for shade.
+        let sizeDiff = [role.rawValue: CGSize(
+            width: frame.width - session.startFrame.width,
+            height: frame.height - session.startFrame.height
+        )]
+        let diffs = WindowSnappingCoordinator.positionDiff(graph: session.graph, sizeDiff: sizeDiff)
+        var moves: [(WindowRole, NSPoint)] = []
+        for (key, delta) in diffs where delta.dx != 0 || delta.dy != 0 {
+            guard let other = WindowRole(rawValue: key), other != role,
+                  let origin = session.startOrigins[other] else { continue }
+            moves.append((other, NSPoint(x: origin.x + delta.dx, y: origin.y + delta.dy)))
+        }
+        moveTogether(moves)
+    }
+
+    func resizeEnd(_ role: WindowRole) {
+        guard resize?.role == role else { return }
+        resize = nil
+        for (member, win) in windows { lastFrames[member] = win.frame }
+        saveLayout()
+    }
+
     // MARK: - Persistence
 
     func saveLayout() {
         guard let store = stateStore else { return }
         var positions: [String: WindowState.WindowPoint] = [:]
+        var sizes: [String: WindowState.WindowSize] = [:]
         var vis: [String: Bool] = [:]
         var sh: [String: Bool] = [:]
         for role in WindowRole.allCases {
             if let win = windows[role] {
                 let frame = win.frame
-                positions[role.rawValue] = WindowState.WindowPoint(x: Double(frame.origin.x), y: Double(frame.origin.y))
+                let expanded = shaded[role] == true ? (expandedSizes[role] ?? role.defaultSize) : frame.size
+                // Persist the expanded origin for a shaded window. On restore
+                // we create it expanded first and then collapse it, which keeps
+                // the visible title bar at exactly the same screen position.
+                let originY = shaded[role] == true ? frame.maxY - expanded.height : frame.minY
+                positions[role.rawValue] = WindowState.WindowPoint(x: Double(frame.minX), y: Double(originY))
+                sizes[role.rawValue] = WindowState.WindowSize(
+                    width: Double(role == .player ? role.defaultSize.width : expanded.width),
+                    height: Double(role == .player ? role.defaultSize.height : expanded.height)
+                )
             }
             vis[role.rawValue] = visible[role] ?? true
             sh[role.rawValue] = shaded[role] ?? false
         }
         store.set(key: "windowPositions", value: positions)
+        store.set(key: "windowSizes", value: sizes)
         store.set(key: "windowVisible", value: vis)
         store.set(key: "windowShaded", value: sh)
         // No "attachments" key any more: which windows are docked is a fact
@@ -464,7 +553,7 @@ extension WindowManager: NSWindowDelegate {
               let role = (win as? RetroWindow)?.role ?? role(for: win)
         else { return }
         lastFrames[role] = win.frame
-        if drag == nil { saveLayout() }
+        if drag == nil && resize == nil { saveLayout() }
     }
 
     func windowWillClose(_ notification: Notification) {

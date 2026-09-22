@@ -42,6 +42,16 @@ final class WindowingTests: XCTestCase {
         XCTAssertEqual(WindowLayout.shadeHeight, WindowLayout.titleBarHeight)
     }
 
+    func testOnlySecondaryWindowsAreResizable() {
+        XCTAssertFalse(WindowRole.player.isResizable)
+        XCTAssertEqual(WindowRole.player.minimumSize, WindowRole.player.defaultSize)
+        for role in WindowRole.allCases where role != .player {
+            XCTAssertTrue(role.isResizable)
+            XCTAssertGreaterThanOrEqual(role.defaultSize.width, role.minimumSize.width)
+            XCTAssertGreaterThanOrEqual(role.defaultSize.height, role.minimumSize.height)
+        }
+    }
+
 
 
 
@@ -283,5 +293,70 @@ final class SavedPlaylistsWindowTests: XCTestCase {
         XCTAssertEqual(visible[WindowRole.savedPlaylists.rawValue], false)
         let positions = store.get([String: WindowState.WindowPoint].self, key: "windowPositions", fallback: [:])
         XCTAssertEqual(positions[WindowRole.savedPlaylists.rawValue]?.x, Double(playlists.frame.minX))
+    }
+}
+
+@MainActor
+final class WindowResizeTests: XCTestCase {
+    func testSecondaryWindowResizesFromBottomRightAndPersistsSize() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = StateStore(fileURL: directory.appendingPathComponent("state.json"))
+        let manager = WindowManager()
+        manager.configure(stateStore: store, log: nil)
+        manager.createAll(hosts: [.player: NSView(), .search: NSView(), .art: NSView()])
+        defer {
+            for role in [WindowRole.player, .search, .art] { manager.window(for: role)?.orderOut(nil) }
+            store.flush()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let player = try XCTUnwrap(manager.window(for: .player))
+        let search = try XCTUnwrap(manager.window(for: .search))
+        let art = try XCTUnwrap(manager.window(for: .art))
+        let playerStart = player.frame
+        let searchStart = search.frame
+        let artStart = art.frame
+
+        let playerGrip = CGPoint(x: playerStart.maxX, y: playerStart.minY)
+        manager.resizeBegin(.player, mouse: playerGrip)
+        manager.resizeUpdate(.player, mouse: CGPoint(x: playerGrip.x + 100, y: playerGrip.y - 100))
+        manager.resizeEnd(.player)
+        XCTAssertEqual(player.frame, playerStart, "PLAYER must remain fixed-size")
+
+        let grip = CGPoint(x: searchStart.maxX, y: searchStart.minY)
+        manager.resizeBegin(.search, mouse: grip)
+        manager.resizeUpdate(.search, mouse: CGPoint(x: grip.x + 80, y: grip.y - 60))
+        manager.resizeEnd(.search)
+
+        XCTAssertEqual(search.frame.width, searchStart.width + 80)
+        XCTAssertEqual(search.frame.height, searchStart.height + 60)
+        XCTAssertEqual(search.frame.maxY, searchStart.maxY, "the top edge stays anchored")
+        XCTAssertEqual(art.frame.minY, artStart.minY - 60, "a docked window underneath follows the resized edge")
+
+        let sizes = store.get([String: WindowState.WindowSize].self, key: "windowSizes", fallback: [:])
+        XCTAssertEqual(sizes[WindowRole.search.rawValue]?.width, Double(searchStart.width + 80))
+        XCTAssertEqual(sizes[WindowRole.search.rawValue]?.height, Double(searchStart.height + 60))
+        XCTAssertEqual(sizes[WindowRole.player.rawValue]?.width, Double(WindowRole.player.defaultSize.width))
+    }
+
+    func testSavedSecondarySizeIsRestoredButPlayerSizeIsIgnored() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = StateStore(fileURL: directory.appendingPathComponent("state.json"))
+        store.set(key: "windowSizes", value: [
+            WindowRole.player.rawValue: WindowState.WindowSize(width: 900, height: 700),
+            WindowRole.log.rawValue: WindowState.WindowSize(width: 520, height: 360),
+        ])
+        let manager = WindowManager()
+        manager.configure(stateStore: store, log: nil)
+        manager.createAll(hosts: [.player: NSView(), .log: NSView()])
+        defer {
+            manager.window(for: .player)?.orderOut(nil)
+            manager.window(for: .log)?.orderOut(nil)
+            store.flush()
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        XCTAssertEqual(manager.window(for: .player)?.frame.size, WindowRole.player.defaultSize)
+        XCTAssertEqual(manager.window(for: .log)?.frame.size, CGSize(width: 520, height: 360))
     }
 }

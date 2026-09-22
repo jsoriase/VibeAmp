@@ -86,6 +86,7 @@ private struct QueueTracksTable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let table = TrackTable()
+        table.style = .plain
         table.headerView = nil
         table.backgroundColor = .black
         table.rowHeight = 34
@@ -166,6 +167,8 @@ private struct QueueTracksTable: NSViewRepresentable {
             delete.toolTip = "Remove \(track.title)"
             delete.setAccessibilityLabel("Remove \(track.title)")
             let stack = NSStackView(views: [number, titleStack, duration, delete])
+            // Fill the row so the title gets all space between the fixed-width columns.
+            stack.distribution = .fill
             stack.spacing = 6
             stack.alignment = .centerY
             stack.translatesAutoresizingMaskIntoConstraints = false

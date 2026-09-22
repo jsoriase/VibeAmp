@@ -87,7 +87,7 @@ Resolving a fresh song costs ~10–12 s, almost entirely inside yt-dlp's YouTube
 ```
 
 - `volume`, `eq` (flat legacy dict + modern `eqSettings`), `queueEntries`/`queueIndex`
-- `windowPositions`, `windowVisible`, `windowShaded`, `attachments`
+- `windowPositions`, `windowSizes`, `windowVisible`, `windowShaded`, `attachments`
 - Debounced (500 ms), atomic (tmp + rename), corrupt files fall back to defaults
 - Restored windows are validated against connected displays; off-screen windows re-clamp on-screen
 - Migrates Electron-era `bounds`/`visible`/`queue` on first native launch (preserves its keys)

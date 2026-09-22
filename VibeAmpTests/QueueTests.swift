@@ -29,6 +29,51 @@ final class QueueTests: XCTestCase {
         XCTAssertEqual(queue.currentTrack?.id, "id1")
     }
 
+    func testInsertAtBeginningKeepsCurrentTrackAndDoesNotSelectInsertedTrack() {
+        let tracks = makeTracks(4)
+        let queue = QueueStore(entries: Array(tracks.prefix(3)), currentIndex: 1)
+
+        XCTAssertEqual(queue.insert(tracks[3], at: .beginning), 0)
+
+        XCTAssertEqual(queue.entries.map(\.id), ["id3", "id0", "id1", "id2"])
+        XCTAssertEqual(queue.currentIndex, 2)
+        XCTAssertEqual(queue.currentTrack?.id, "id1")
+    }
+
+    func testInsertNextPlacesTrackAfterCurrentWithoutChangingPlayback() {
+        let tracks = makeTracks(4)
+        let queue = QueueStore(entries: Array(tracks.prefix(3)), currentIndex: 1)
+
+        XCTAssertEqual(queue.insert(tracks[3], at: .next), 2)
+
+        XCTAssertEqual(queue.entries.map(\.id), ["id0", "id1", "id3", "id2"])
+        XCTAssertEqual(queue.currentIndex, 1)
+        XCTAssertEqual(queue.currentTrack?.id, "id1")
+        XCTAssertEqual(queue.peek(1)?.id, "id3")
+    }
+
+    func testInsertAtEndKeepsCurrentTrack() {
+        let tracks = makeTracks(4)
+        let queue = QueueStore(entries: Array(tracks.prefix(3)), currentIndex: 1)
+
+        XCTAssertEqual(queue.insert(tracks[3], at: .end), 3)
+
+        XCTAssertEqual(queue.entries.map(\.id), ["id0", "id1", "id2", "id3"])
+        XCTAssertEqual(queue.currentIndex, 1)
+        XCTAssertEqual(queue.currentTrack?.id, "id1")
+    }
+
+    func testInsertNextWithoutCurrentUsesBeginningAndLeavesQueueUnselected() {
+        let tracks = makeTracks(3)
+        let queue = QueueStore(entries: Array(tracks.prefix(2)), currentIndex: -1)
+
+        XCTAssertEqual(queue.insert(tracks[2], at: .next), 0)
+
+        XCTAssertEqual(queue.entries.map(\.id), ["id2", "id0", "id1"])
+        XCTAssertEqual(queue.currentIndex, -1)
+        XCTAssertNil(queue.currentTrack)
+    }
+
     func testReplaceAndPlay() {
         let queue = QueueStore()
         queue.replaceAndPlay(makeTracks(3))

@@ -137,6 +137,13 @@ final class AppState {
         playback.load(track)
     }
 
+    /// Adds a track to the queue without changing playback. Persisting also
+    /// re-evaluates next-track prefetch when the insertion changes that target.
+    func enqueue(_ track: Track, at position: QueueStore.InsertionPosition) {
+        queue.insert(track, at: position)
+        persistEphemeral()
+    }
+
     func replaceAndPlay(_ tracks: [Track], title: String? = nil) {
         queue.replaceAndPlay(tracks)
         persistEphemeral()

@@ -12,6 +12,11 @@ struct WindowState: Codable, Equatable, Sendable {
         var y: Double
     }
 
+    struct WindowSize: Codable, Equatable, Sendable {
+        var width: Double
+        var height: Double
+    }
+
     init(
         positions: [String: WindowPoint] = [:],
         visible: [String: Bool] = [:],

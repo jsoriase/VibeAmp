@@ -25,17 +25,31 @@ struct RetroWindowChrome<Content: View>: View {
         // pushed the title bar clean off the top of PLAYER and SEARCH; here the
         // bar is always laid out first and any excess is clipped at the bottom.
         GeometryReader { geo in
-            VStack(spacing: 0) {
-                titleBar
-                    .frame(height: isShaded ? geo.size.height : WindowLayout.titleBarHeight)
-                if !isShaded {
-                    content
-                        .frame(
-                            width: geo.size.width,
-                            height: max(0, geo.size.height - WindowLayout.titleBarHeight),
-                            alignment: .top
-                        )
-                        .clipped()
+            ZStack(alignment: .bottomTrailing) {
+                VStack(spacing: 0) {
+                    titleBar
+                        .frame(height: isShaded ? geo.size.height : WindowLayout.titleBarHeight)
+                    if !isShaded {
+                        content
+                            .frame(
+                                width: geo.size.width,
+                                height: max(0, geo.size.height - WindowLayout.titleBarHeight),
+                                alignment: .top
+                            )
+                            .clipped()
+                    }
+                }
+                if role.isResizable && !isShaded {
+                    ResizeGrip(
+                        begin: {
+                            windows.resizeBegin(role, mouse: NSEvent.mouseLocation)
+                        },
+                        update: { windows.resizeUpdate(role, mouse: NSEvent.mouseLocation) },
+                        end: {
+                            windows.resizeEnd(role)
+                        }
+                    )
+                    .padding(2)
                 }
             }
         }
@@ -102,6 +116,50 @@ struct RetroWindowChrome<Content: View>: View {
             windows.toggleShade(role)
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// Classic diagonal resize hatch. Its hit area is intentionally larger than
+/// the three visible rules so it remains easy to grab at small window sizes.
+private struct ResizeGrip: View {
+    let begin: () -> Void
+    let update: () -> Void
+    let end: () -> Void
+
+    @State private var active = false
+    @State private var hovering = false
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(VibeTheme.panelRaised.opacity(hovering || active ? 0.95 : 0.75))
+            Path { path in
+                for offset in stride(from: CGFloat(4), through: 12, by: 4) {
+                    path.move(to: CGPoint(x: 16, y: offset))
+                    path.addLine(to: CGPoint(x: offset, y: 16))
+                }
+            }
+            .stroke(hovering || active ? VibeTheme.textPrimary : VibeTheme.borderLight, lineWidth: 1)
+        }
+        .frame(width: 18, height: 18)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if !active {
+                        active = true
+                        begin()
+                    }
+                    update()
+                }
+                .onEnded { _ in
+                    active = false
+                    end()
+                }
+        )
+        .help("Resize window")
+        .accessibilityLabel("Resize window")
     }
 }
 

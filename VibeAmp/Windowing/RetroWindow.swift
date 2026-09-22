@@ -27,7 +27,7 @@ final class RetroWindow: NSWindow {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         // Shade collapses to the header height; without this AppKit refuses to
         // shrink a titled window that far.
-        minSize = NSSize(width: 200, height: WindowLayout.titleBarHeight)
+        minSize = NSSize(width: role.minimumSize.width, height: WindowLayout.titleBarHeight)
         // Hide traffic lights; our SwiftUI chrome provides min/shade/close.
         for buttonType: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             standardWindowButton(buttonType)?.isHidden = true
@@ -37,8 +37,9 @@ final class RetroWindow: NSWindow {
         contentView.layer?.cornerRadius = 2
         contentView.layer?.masksToBounds = true
         self.contentView = contentView
-        // Fixed-size panels like the original (shade resizes programmatically).
-        // Note: resizable must be false for the user, but shade toggles it briefly.
+        // Resizing is handled by our own retro grip. Keeping `.resizable` out of
+        // the style mask prevents an invisible native resize border and keeps
+        // PLAYER strictly fixed-size (shade still resizes programmatically).
     }
 
     override var canBecomeKey: Bool { true }

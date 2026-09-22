@@ -40,6 +40,24 @@ enum WindowRole: String, CaseIterable, Codable, Sendable {
     /// Column width shared by every module so the cluster tiles cleanly.
     static let columnWidth: CGFloat = 380
 
+    /// PLAYER stays at its authored size. Every secondary module exposes the
+    /// Winamp-style resize grip drawn by `RetroWindowChrome`.
+    var isResizable: Bool { self != .player }
+
+    /// Smallest useful expanded size for each module. Shade is allowed to go
+    /// below this height because it is a separate, programmatic state.
+    var minimumSize: CGSize {
+        switch self {
+        case .player: return defaultSize
+        case .equalizer: return CGSize(width: 340, height: 170)
+        case .playlist: return CGSize(width: 280, height: 150)
+        case .savedPlaylists: return CGSize(width: 280, height: 180)
+        case .search: return CGSize(width: 300, height: 180)
+        case .art: return CGSize(width: 180, height: 140)
+        case .log: return CGSize(width: 280, height: 150)
+        }
+    }
+
     var defaultSize: CGSize {
         switch self {
         case .player: return CGSize(width: Self.columnWidth, height: 212)

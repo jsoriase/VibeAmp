@@ -6,6 +6,12 @@ import Observation
 @MainActor
 @Observable
 final class QueueStore {
+    enum InsertionPosition {
+        case beginning
+        case next
+        case end
+    }
+
     var entries: [Track] = []
     var currentIndex: Int = -1
 
@@ -25,6 +31,29 @@ final class QueueStore {
     func addAndPlay(_ track: Track) {
         entries.append(track)
         currentIndex = entries.count - 1
+    }
+
+    /// Inserts a track without selecting or playing it. If playback already has
+    /// a current entry, inserting before it shifts the index so that the same
+    /// track remains current.
+    @discardableResult
+    func insert(_ track: Track, at position: InsertionPosition) -> Int {
+        let hasCurrent = entries.indices.contains(currentIndex)
+        let insertionIndex: Int
+        switch position {
+        case .beginning:
+            insertionIndex = 0
+        case .next:
+            insertionIndex = hasCurrent ? currentIndex + 1 : 0
+        case .end:
+            insertionIndex = entries.endIndex
+        }
+
+        entries.insert(track, at: insertionIndex)
+        if hasCurrent, insertionIndex <= currentIndex {
+            currentIndex += 1
+        }
+        return insertionIndex
     }
 
     func replaceAndPlay(_ newEntries: [Track]) {
