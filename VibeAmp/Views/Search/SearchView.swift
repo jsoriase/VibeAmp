@@ -117,17 +117,17 @@ struct SearchView: View {
                                 .buttonStyle(.plain)
                                 .help("Play \(item.title)")
                                 .accessibilityLabel("Play \(item.title)")
-                                .contextMenu {
-                                    Button("Añadir al inicio") {
+                                .retroContextMenu([
+                                    RetroContextMenuAction(title: "Añadir al inicio", symbol: "arrow.up.to.line") {
                                         enqueueResult(item, at: .beginning)
-                                    }
-                                    Button("Añadir siguiente") {
+                                    },
+                                    RetroContextMenuAction(title: "Añadir siguiente", symbol: "text.line.first.and.arrowtriangle.forward") {
                                         enqueueResult(item, at: .next)
-                                    }
-                                    Button("Añadir final") {
+                                    },
+                                    RetroContextMenuAction(title: "Añadir final", symbol: "arrow.down.to.line") {
                                         enqueueResult(item, at: .end)
                                     }
-                                }
+                                ])
                             }
                         }
                     }

@@ -266,6 +266,7 @@ actor YouTubeService {
                 "--print", "acodec",
                 "--print", "abr",
                 "--print", "asr",
+                "--print", "duration",
             ]
         )
         guard let info = YTDLPModels.parsePrintedStream(stdout) else {

@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import VibeAmp
 
 final class ModelParsingTests: XCTestCase {
@@ -196,6 +197,15 @@ final class ModelParsingTests: XCTestCase {
         XCTAssertEqual(info?.sampleRateKHz, 44)
         XCTAssertEqual(info?.codec, "")
         XCTAssertEqual(info?.ext, "")
+        XCTAssertNil(info?.durationSeconds)
+    }
+
+    func testParsePrintedStreamDuration() {
+        let base = "https://cdn.example/audio.m4a\nm4a\nmp4a.40.2\n128\n44100\n"
+        XCTAssertEqual(YTDLPModels.parsePrintedStream(base + "439.25\n")?.durationSeconds, 439.25)
+        for missing in ["NA", "nan", "inf", "0", "-1", ""] {
+            XCTAssertNil(YTDLPModels.parsePrintedStream(base + missing + "\n")?.durationSeconds)
+        }
     }
 
     func testParsePrintedStreamRejectsGarbage() {
@@ -263,12 +273,13 @@ final class SegmentedAudioTests: XCTestCase {
     private func box(_ type: String, _ body: Data) -> Data {
         word(UInt64(body.count + 8)) + Data(type.utf8) + body
     }
-    private func fixture(version: UInt64 = 0, offset: UInt64 = 7, reference: UInt64 = 100, timescale: UInt64 = 1000) -> Data {
+    private func fixture(version: UInt64 = 0, offset: UInt64 = 7, reference: UInt64 = 100, timescale: UInt64 = 1000,
+                         durations: [UInt64] = [10000]) -> Data {
         let width = version == 0 ? 4 : 8
         let fields = word(version << 24) + word(1) + word(timescale)
-        let timing = word(0, width) + word(offset, width) + word(1)
-        let entry = word(reference) + word(10000) + word(0)
-        return box("ftyp", Data()) + box("moov", Data()) + box("sidx", fields + timing + entry)
+        let timing = word(0, width) + word(offset, width) + word(UInt64(durations.count))
+        let entries = durations.reduce(Data()) { $0 + word(reference) + word($1) + word(0) }
+        return box("ftyp", Data()) + box("moov", Data()) + box("sidx", fields + timing + entries)
     }
     func testIndexUsesOffsetsRelativeToEndOfSidx() throws {
         for version: UInt64 in [0, 1] {
@@ -293,6 +304,13 @@ final class SegmentedAudioTests: XCTestCase {
         XCTAssertNil(AudioSegmentIndex.parse(fixture(version: 1, offset: UInt64.max)))
         XCTAssertNil(AudioSegmentIndex.parse(box("ftyp", Data()) + box("mdat", Data()) + bytes))
     }
+    func testDurationIncludesEveryFragmentAndFractionalFinalSamples() throws {
+        for version: UInt64 in [0, 1] {
+            let index = try XCTUnwrap(AudioSegmentIndex.parse(fixture(version: version, timescale: 44100,
+                                                                     durations: [44100, 22050, 11025])))
+            XCTAssertEqual(index.duration, 1.75, accuracy: 1e-9)
+        }
+    }
     func testPlaylistEndpointServesOnlyItsOwnPath() async throws {
         let server = try await SegmentedAudio.serve(playlist: "#EXTM3U\n#EXT-X-ENDLIST\n")
         let (body, response) = try await URLSession.shared.data(from: server.url)
@@ -306,6 +324,73 @@ final class SegmentedAudioTests: XCTestCase {
         let (_, missing) = try await URLSession.shared.data(from: server.url.deletingLastPathComponent().appendingPathComponent("other"))
         XCTAssertEqual((missing as? HTTPURLResponse)?.statusCode, 404)
         withExtendedLifetime(server) {}
+    }
+}
+
+@MainActor
+final class PlaybackDurationTests: XCTestCase {
+    func testFragmentDurationOverridesDoubledContainerAndRoundedMetadata() {
+        XCTAssertEqual(PlaybackDuration.seconds(indexed: 439.228662, metadata: 439, reported: 878.409433),
+                       439.228662, accuracy: 1e-6)
+    }
+
+    func testMetadataBoundsSilentTailWithoutTruncatingEncoderPadding() {
+        XCTAssertEqual(PlaybackDuration.seconds(metadata: 439, reported: 878.409433), 440)
+        XCTAssertEqual(PlaybackDuration.seconds(metadata: 439, reported: 439.228662), 439.228662)
+        XCTAssertEqual(PlaybackDuration.seconds(metadata: 439, reported: 438.9), 438.9)
+        XCTAssertEqual(PlaybackDuration.seconds(metadata: 439), 440)
+    }
+
+    func testMissingAndInvalidDurationsFallBackToNativeTimeline() {
+        for unknown: Double? in [nil, 0, -1, .nan, .infinity] {
+            XCTAssertEqual(PlaybackDuration.seconds(indexed: unknown, metadata: unknown, reported: 225.5), 225.5)
+            XCTAssertEqual(PlaybackDuration.seconds(indexed: unknown, metadata: unknown), 0)
+        }
+        let item = AVPlayerItem(asset: AVMutableComposition())
+        XCTAssertEqual(PlaybackDuration.apply(to: item), 0)
+        XCTAssertFalse(item.forwardPlaybackEndTime.isValid)
+    }
+
+    func testExactDurationReplacesFallbackBoundaryAndSurvivesRefresh() {
+        let item = AVPlayerItem(asset: AVMutableComposition())
+        _ = PlaybackDuration.apply(to: item, metadata: 439)
+        XCTAssertEqual(item.forwardPlaybackEndTime.seconds, 440)
+        for _ in 0..<3 {
+            let duration = PlaybackDuration.apply(to: item, indexed: 439.228662, metadata: 439)
+            XCTAssertEqual(duration, 439.228662, accuracy: 1e-6)
+            XCTAssertEqual(item.forwardPlaybackEndTime.seconds, 439.228662, accuracy: 1e-6)
+        }
+    }
+
+    func testNativePlayerSignalsEndBeforeSilentTail() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".caf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 88200))
+        buffer.frameLength = 88200
+        let samples = try XCTUnwrap(buffer.floatChannelData?[0])
+        for frame in 0..<88200 {
+            samples[frame] = frame < 44100 ? Float(sin(Double(frame) * 2 * .pi * 440 / 44100)) * 0.1 : 0
+        }
+        // Close the file before opening it as an asset.
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            try file.write(from: buffer)
+        }
+        let source = AVURLAsset(url: url)
+        let fullDuration = try await source.load(.duration)
+        XCTAssertEqual(fullDuration.seconds, 2, accuracy: 0.01)
+        let item = AVPlayerItem(asset: source)
+        _ = PlaybackDuration.apply(to: item, indexed: 1)
+        let ended = expectation(description: "Player ends at the audio boundary")
+        let observer = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime,
+                                                              object: item, queue: .main) { _ in ended.fulfill() }
+        let player = AVPlayer(playerItem: item)
+        player.isMuted = true
+        defer { player.pause(); NotificationCenter.default.removeObserver(observer) }
+        player.play()
+        await fulfillment(of: [ended], timeout: 5)
+        XCTAssertEqual(player.currentTime().seconds, 1, accuracy: 0.05)
     }
 }
 

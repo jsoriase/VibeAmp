@@ -1,7 +1,7 @@
 # VibeAmp — Native macOS Edition
 
 <p align="center">
-  <img src="art/logo512.png" width="256" alt="VibeAmp logo">
+  <img src="art/vibeamp-retro-icon.png" width="256" alt="VibeAmp retro equalizer icon">
 </p>
 
 Retro Winamp-inspired YouTube music player, rebuilt as a **fully native macOS app** in Swift (SwiftUI + AppKit + AVFoundation). No Electron, no Chromium, no web views, no JavaScript — one shared Swift state observed by seven independent retro modules plus a modern menu-bar mini player.
@@ -69,7 +69,7 @@ Stream resolution prefers AVFoundation-compatible audio:
 bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio/best
 ```
 
-Parsed from lightweight `--print url/ext/acodec/abr/asr` output (~1 KB instead of `--dump-json`'s ~600 KB). CDN URLs expire and are **never persisted** — only video ID / YouTube URL is stored.
+Parsed from lightweight `--print url/ext/acodec/abr/asr/duration` output (~1 KB instead of `--dump-json`'s ~600 KB). CDN URLs expire and are **never persisted** — only video ID / YouTube URL is stored.
 
 ### Load-time performance (measured)
 
@@ -134,6 +134,14 @@ Playback stays in `AVPlayer` (stable streaming/seek/buffer), EQ is real DSP, ver
 - `screencapture`-based visual QA requires Screen Recording permission (unit + headless playback probes used instead)
 
 ### Long audio startup
+
+Fragmented M4A duration comes from the MP4 `sidx` sample timeline. AVFoundation
+can report twice that duration and play silence after the audio ends, so both
+the displayed duration and `forwardPlaybackEndTime` use the index. Short tracks
+read the bounded header in the background without delaying playback or losing
+EQ. When no index is available, resolved video metadata caps the duration with
+one second of padding for rounded timestamps; unknown durations keep AVPlayer's
+natural end.
 
 For M4A tracks of 15 minutes or longer, `SegmentedAudio` reads at most 256 KiB
 of the MP4 header and converts a supported `sidx` index into an in-memory HLS

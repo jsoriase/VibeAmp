@@ -49,6 +49,9 @@ final class PlaybackController {
     private var statusObserver: NSKeyValueObservation?
     private var playbackObserver: NSKeyValueObservation?
     private var loadTask: Task<Void, Never>?
+    private var durationTask: Task<Void, Never>?
+    private var metadataDuration: Double?
+    private var indexedDuration: Double?
     private var watchdog: Task<Void, Never>?
     private var segmentedAudio: SegmentedAudio?
     private var wantsPlayback = false
@@ -132,6 +135,7 @@ final class PlaybackController {
     func stop() {
         loadGeneration += 1
         loadTask?.cancel()
+        durationTask?.cancel()
         watchdog?.cancel()
         wantsPlayback = false
         teardownItemObservers()
@@ -198,7 +202,7 @@ final class PlaybackController {
         prefetchTargetKey = nil
         currentTrack = track
         currentTime = 0
-        duration = track.durationSeconds ?? 0
+        duration = PlaybackDuration.seconds(reported: track.durationSeconds ?? 0)
         bitrateKbps = 0
         sampleRateKHz = 0
         beginLoad(track, fresh: false)
@@ -208,6 +212,9 @@ final class PlaybackController {
         loadGeneration += 1
         let generation = loadGeneration
         loadTask?.cancel()
+        durationTask?.cancel()
+        metadataDuration = track.durationSeconds
+        indexedDuration = nil
         teardownItemObservers()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
@@ -234,6 +241,7 @@ final class PlaybackController {
                 guard generation == self.loadGeneration else { return }
                 self.bitrateKbps = stream.bitrateKbps
                 self.sampleRateKHz = stream.sampleRateKHz
+                self.metadataDuration = stream.durationSeconds ?? track.durationSeconds
                 try await self.playStream(stream, track: track, generation: generation)
             } catch {
                 guard generation == self.loadGeneration, !Task.isCancelled else { return }
@@ -248,15 +256,19 @@ final class PlaybackController {
         }
         var playbackURL = url
         var adapter: SegmentedAudio?
+        var index: AudioSegmentIndex?
+        let hasMP4Index = stream.ext == "m4a" && !url.path.contains("m3u8")
         // Long fragmented MP4 files can make AVPlayer scan thousands of fragments
         // before starting. Songs retain the file playback path and its EQ tap.
-        if (track.durationSeconds ?? 0) >= 15 * 60, stream.ext == "m4a",
-           !url.path.contains("m3u8") {
+        if (metadataDuration ?? 0) >= 15 * 60, hasMP4Index {
             statusMessage = "Preparing audio segments…"
             do {
-                adapter = try await SegmentedAudio.prepare(mediaURL: url)
-                if let adapter { playbackURL = adapter.url }
-                else { log?.warning("No supported segment index; using direct audio with a playback timeout") }
+                index = try await AudioSegmentIndex.load(mediaURL: url)
+                if let index {
+                    let segmented = try await SegmentedAudio.serve(playlist: index.playlist(mediaURL: url))
+                    adapter = segmented
+                    playbackURL = segmented.url
+                } else { log?.warning("No supported segment index; using direct audio with a playback timeout") }
             } catch {
                 try Task.checkCancellation()
                 log?.warning("Could not prepare segments: \(error.localizedDescription); using direct audio")
@@ -265,11 +277,13 @@ final class PlaybackController {
         try Task.checkCancellation()
         guard generation == loadGeneration else { return }
         segmentedAudio = adapter
+        indexedDuration = index?.duration
         isEQAvailable = adapter == nil && !url.path.contains("m3u8")
         let asset = AVURLAsset(url: playbackURL)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 10
         playerItem = item
+        updateDuration(for: item)
         ensurePlayer()
         observe(item: item, track: track)
         player?.replaceCurrentItem(with: item)
@@ -277,6 +291,22 @@ final class PlaybackController {
         statusMessage = "Loading audio…"
         player?.play()
         syncPlaybackState()
+        if hasMP4Index, (metadataDuration ?? 0) < 15 * 60 {
+            // Correct short files without delaying playback or disabling EQ.
+            durationTask = Task { @MainActor [weak self] in
+                do {
+                    guard let index = try await AudioSegmentIndex.load(mediaURL: url) else { return }
+                    try Task.checkCancellation()
+                    guard let self, generation == self.loadGeneration, self.playerItem === item else { return }
+                    self.indexedDuration = index.duration
+                    self.updateDuration(for: item)
+                    self.nowPlaying?.update()
+                } catch {
+                    guard let self, !Task.isCancelled, generation == self.loadGeneration else { return }
+                    self.log?.warning("Could not read audio duration; using stream metadata: \(error.localizedDescription)")
+                }
+            }
+        }
         if adapter != nil { log?.info("Segmented playback ready — audio is fetched directly from the CDN") }
         if isEQAvailable {
             Task { @MainActor [weak self] in
@@ -336,6 +366,7 @@ final class PlaybackController {
     private func finishFailure(_ error: Error) {
         loadGeneration += 1
         loadTask?.cancel()
+        durationTask?.cancel()
         watchdog?.cancel()
         wantsPlayback = false
         teardownItemObservers()
@@ -430,6 +461,10 @@ final class PlaybackController {
 
     // MARK: - Observers
 
+    private func updateDuration(for item: AVPlayerItem) {
+        duration = PlaybackDuration.apply(to: item, indexed: indexedDuration, metadata: metadataDuration)
+    }
+
     private func observe(item: AVPlayerItem, track: Track) {
         statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor in
@@ -446,14 +481,11 @@ final class PlaybackController {
             }
         }
         // Keep duration fresh for the seek bar + menu bar.
-        durationObserver = item.observe(\.duration, options: [.new]) { [weak self] item, _ in
+        durationObserver = item.observe(\.duration, options: [.initial, .new]) { [weak self] item, _ in
             Task { @MainActor in
                 guard let self, self.playerItem === item else { return }
-                let seconds = item.duration.seconds
-                if seconds.isFinite, seconds > 0 {
-                    self.duration = seconds
-                    self.nowPlaying?.update()
-                }
+                self.updateDuration(for: item)
+                self.nowPlaying?.update()
             }
         }
         endObserver = NotificationCenter.default.addObserver(
@@ -505,10 +537,7 @@ final class PlaybackController {
                 if seconds.isFinite, seconds >= 0 {
                     self.currentTime = seconds
                 }
-                if let item = self.player?.currentItem {
-                    let dur = item.duration.seconds
-                    if dur.isFinite, dur > 0 { self.duration = dur }
-                }
+                self.updateDuration(for: activeItem)
                 // Throttle Now Playing elapsed updates to whole seconds.
                 self.nowPlaying?.updateIfSecondChanged(elapsed: self.currentTime, duration: self.duration)
             }
@@ -516,6 +545,7 @@ final class PlaybackController {
     }
 
     private func handleEnded() {
+        guard wantsPlayback else { return }
         log?.info("Track ended — advancing")
         if let track = queue.step(1) {
             load(track)
@@ -539,5 +569,37 @@ final class PlaybackController {
         } else {
             finishFailure(error ?? URLError(.cannotDecodeContentData))
         }
+    }
+}
+
+/// Use the fragment timeline when available; metadata bounds malformed container
+/// durations otherwise. yt-dlp metadata can be rounded to whole seconds, so allow
+/// one second of encoder padding rather than cutting the final audio samples.
+enum PlaybackDuration {
+    @MainActor
+    static func apply(to item: AVPlayerItem, indexed: Double? = nil, metadata: Double? = nil) -> Double {
+        let duration = seconds(indexed: indexed, metadata: metadata, reported: item.duration.seconds)
+        // Bound the transport as well as the UI: the normal end notification
+        // must advance the queue before the malformed container's silent tail.
+        // Without an independent duration, retain AVPlayer's natural end (live
+        // streams in particular must not get a fixed playback boundary).
+        let hasKnownEnd = [indexed, metadata].contains { value in
+            guard let value else { return false }
+            return value.isFinite && value > 0
+        }
+        let end = hasKnownEnd ? CMTime(seconds: duration, preferredTimescale: 1_000_000) : .invalid
+        if CMTimeCompare(item.forwardPlaybackEndTime, end) != 0 {
+            item.forwardPlaybackEndTime = end
+        }
+        return duration
+    }
+
+    static func seconds(indexed: Double? = nil, metadata: Double? = nil, reported: Double = .nan) -> Double {
+        if let indexed, indexed.isFinite, indexed > 0 { return indexed }
+        if let metadata, metadata.isFinite, metadata > 0 {
+            if reported.isFinite, reported > 0 { return min(reported, metadata + 1) }
+            return metadata + 1
+        }
+        return reported.isFinite && reported > 0 ? reported : 0
     }
 }

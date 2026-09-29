@@ -19,6 +19,7 @@ enum YTDLPModels {
         var sampleRateKHz: Int
         var codec: String
         var ext: String
+        var durationSeconds: Double? = nil
     }
 
     enum URLInfo: Sendable, Equatable {
@@ -58,7 +59,7 @@ enum YTDLPModels {
         stdout.split(separator: "\n").compactMap { parseSearchLine(String($0)) }
     }
 
-    // MARK: - Stream parsing (--print url/ext/acodec/abr/asr, one per line)
+    // MARK: - Stream parsing (--print url/ext/acodec/abr/asr/duration, one per line)
 
     /// Parses the lightweight `--print` output for a single resolved stream.
     /// Preferred over `--dump-json` (which dumps ~600 KB of every format):
@@ -74,12 +75,14 @@ enum YTDLPModels {
         let codec = lines[2] == "NA" ? "" : lines[2]
         let bitrate = Double(lines[3]).map { Int($0) } ?? 128
         let sampleRate = Double(lines[4]).map { Int(($0 / 1000).rounded()) } ?? 44
+        let duration = lines.count > 5 ? Double(lines[5]) : nil
         return StreamInfo(
             streamURL: url,
             bitrateKbps: bitrate,
             sampleRateKHz: sampleRate,
             codec: codec,
-            ext: ext
+            ext: ext,
+            durationSeconds: duration.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         )
     }
 

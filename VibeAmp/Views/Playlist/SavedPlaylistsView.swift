@@ -109,14 +109,16 @@ struct SavedPlaylistsView: View {
             targeted: { targeted in targetedID = targeted ? playlist.id : nil },
             receive: { payload in _ = library.add([payload.track], to: playlist.id) }
         ))
-        .contextMenu {
-            Button("Rename") {
+        .retroContextMenu([
+            RetroContextMenuAction(title: "Rename", symbol: "pencil") {
                 commitName()
                 draftName = playlist.name
                 editingID = playlist.id
+            },
+            RetroContextMenuAction(title: "Delete Playlist", symbol: "trash", role: .destructive) {
+                library.delete(playlist.id)
             }
-            Button("Delete Playlist", role: .destructive) { library.delete(playlist.id) }
-        }
+        ])
     }
 
     private func playlistContents(_ playlist: SavedPlaylist) -> some View {

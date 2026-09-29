@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 /// Describes the existing fragments; audio stays on the CDN and is never remuxed
-/// or downloaded in full. Only the small MP4 index is read before playback.
+/// or downloaded in full. Only the small MP4 index is read to describe playback.
 struct AudioSegmentIndex: Equatable {
     struct Segment: Equatable {
         let offset: UInt64
@@ -11,6 +11,30 @@ struct AudioSegmentIndex: Equatable {
     }
     let initializationSize: Int
     let segments: [Segment]
+
+    /// The sample timeline, independent of AVFoundation's container estimate.
+    var duration: Double { segments.reduce(0) { $0 + $1.duration } }
+
+    static func load(mediaURL: URL) async throws -> AudioSegmentIndex? {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 20
+        let session = URLSession(configuration: config)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: mediaURL)
+        let limit = 256 * 1024
+        request.setValue("bytes=0-\(limit - 1)", forHTTPHeaderField: "Range")
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 206,
+              http.value(forHTTPHeaderField: "Content-Range")?.hasPrefix("bytes 0-") == true else { return nil }
+        var header = Data()
+        for try await byte in bytes {
+            header.append(byte)
+            if header.count == limit { break }
+        }
+        try Task.checkCancellation()
+        return parse(header)
+    }
 
     static func parse(_ data: Data) -> AudioSegmentIndex? {
         let bytes = [UInt8](data)
@@ -82,28 +106,6 @@ final class SegmentedAudio: @unchecked Sendable {
     private init(url: URL, listener: NWListener) {
         self.url = url
         self.listener = listener
-    }
-
-    static func prepare(mediaURL: URL) async throws -> SegmentedAudio? {
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
-        config.timeoutIntervalForResource = 20
-        let session = URLSession(configuration: config)
-        defer { session.invalidateAndCancel() }
-        var request = URLRequest(url: mediaURL)
-        let limit = 256 * 1024
-        request.setValue("bytes=0-\(limit - 1)", forHTTPHeaderField: "Range")
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 206,
-              http.value(forHTTPHeaderField: "Content-Range")?.hasPrefix("bytes 0-") == true else { return nil }
-        var header = Data()
-        for try await byte in bytes {
-            header.append(byte)
-            if header.count == limit { break }
-        }
-        try Task.checkCancellation()
-        guard let index = AudioSegmentIndex.parse(header) else { return nil }
-        return try await serve(playlist: index.playlist(mediaURL: mediaURL))
     }
 
     static func serve(playlist: String) async throws -> SegmentedAudio {
